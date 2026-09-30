@@ -1,0 +1,9 @@
+{
+  "name": "Assistant",
+  "port": 8794,
+  "orbs": [
+    { "title": "Notes", "path": "sample-notes", "kind": "notes" },
+    { "title": "Props", "path": "media", "kind": "media" }
+  ],
+  "state_timeout_s": 600
+}

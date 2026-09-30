@@ -67,3 +67,21 @@ requirements.txt     contiene las dependencias
 assets/              contiene el modelo de detección de manos
 core/                contiene la lógica del proyecto
 ```
+
+## Proyecto web (barehands)
+
+Este repositorio también contiene, en paralelo y sin relación de código con lo
+anterior, una segunda app: una interfaz gestual basada en navegador
+(`stage.html` + `server.py`), controlable por una IA externa vía HTTP y pensada
+para streaming con OBS. No reemplaza ni comparte código con `run.py`/`core/`.
+
+Ejecución:
+
+```powershell
+python server.py
+```
+
+Luego abre `http://127.0.0.1:8794/stage.html` (control, con cámara) o
+`http://127.0.0.1:8794/stage.html?role=render` (vista transparente para OBS).
+
+Documentación completa: [docs/README_COMPLETO.md](docs/README_COMPLETO.md).

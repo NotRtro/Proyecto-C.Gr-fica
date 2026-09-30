@@ -1,0 +1,49 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# --- config local (barehands web) ---
+# barehands.json es la config real del usuario (puede tener paths propios);
+# barehands.json.example es la plantilla y si se versiona.
+/barehands.json
+/docs/*
+# --- estado runtime (barehands web) ---
+# state/state, mood.json y wave.json los reescribe un script externo en caliente.
+# server.py ya usa valores por defecto (idle/green/[]) si faltan, asi que no
+# hace falta versionarlos: solo se conserva la carpeta.
+/state/*
+!/state/.gitkeep
+
+# --- assets del usuario (barehands web) ---
+# media/ solo trae carpetas + README en el repo base; el usuario agrega sus
+# propias imagenes/videos/modelos, que no deberian terminar en el repo.
+/media/**/*.png
+/media/**/*.jpg
+/media/**/*.jpeg
+/media/**/*.webp
+/media/**/*.gif
+/media/**/*.webm
+/media/**/*.mp4
+/media/**/*.glb
+/media/**/*.gltf
+!/media/**/README.md
+
+# --- sistema operativo ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# --- editores ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- logs ---
+*.log
