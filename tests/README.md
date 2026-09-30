@@ -20,7 +20,12 @@ Requiere Node 18+. No hay dependencias que instalar.
 | `two_hand.json` | dos manos: escala x2, giro 20 grados, y la mano restante sigue arrastrando |
 | `explode_drag.json` | pinch en vacio + arrastre horizontal = explode/assemble; vertical no hace nada |
 | `hand_swap.json` | MediaPipe alterna Left/Right y pierde la mano 100 ms: el objeto no se suelta |
-| `palm.json` | palma abierta sostenida dispara 1 vez; palma corta no |
+| `palm.json` | prueba negativa: mano abierta y quieta no dispara nada |
+| `menu_orb_click.json` | grab rapido sobre el orbe (con temblor) abre el menu |
+| `menu_orb_drag.json` | mantener y mover el orbe lo arrastra sin abrir el menu |
+| `menu_select.json` | elegir filas: el punto de intencion corrige el salto al juntar los dedos |
+| `menu_dwell.json` | elegir filas dejando la mano quieta (opcion de permanencia) |
+| `calibration.json` | protocolo de calibracion con valores conocidos |
 
 Las de esta carpeta son **sinteticas** (`synthetic.mjs` arma las manos a partir
 de poses). Tambien se pueden ver en el navegador:
@@ -28,10 +33,26 @@ de poses). Tambien se pueden ver en el navegador:
 
 ## Grabar una sesion real
 
-1. Abre el tracker con camara y pulsa **G** (aparece `● REC` arriba a la derecha).
+1. Abre el tracker con camara y pulsa **G** (aparece `● REC` abajo a la izquierda).
 2. Haz el gesto y pulsa **G** otra vez: se descarga `grabacion-<fecha>.json`.
 3. Copiala a `tests/recordings/` con un nombre claro y reproducela con
    `?replay=<nombre>`. Para usarla como test, agrega su caso en `run.mjs`.
 
 Una grabacion puede traer `"setup"`: comandos `/cmd` que se aplican al empezar
 cada vuelta del replay (por ejemplo, la tarjeta que usa `tap.json`).
+
+## Replay cuadro a cuadro
+
+`?replay=<nombre>&step=1` avanza un frame de la grabacion por frame de pantalla y
+usa el tiempo de la grabacion: el resultado no depende de la velocidad del
+navegador (util si la pestana pinta a saltos).
+
+## Calibrar desde una grabacion
+
+```bash
+node tests/calibrate.mjs tests/recordings/calibration.json
+```
+
+Graba con la tecla G siguiendo el protocolo (3 s mano abierta y quieta, 2 s en
+pinch, 4 veces pinch y soltar) y pasa el archivo a este comando. La app tiene el
+mismo analisis en Ajustes > "Calibrar mis manos".

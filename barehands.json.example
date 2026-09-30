@@ -1,5 +1,5 @@
 {
-  "name": "Assistant",
+  "name": "HeyTECHI",
   "port": 8794,
   "orbs": [
     { "title": "Notes", "path": "sample-notes", "kind": "notes" },

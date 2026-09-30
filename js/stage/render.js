@@ -25,8 +25,8 @@ function createRenderItem(def) {
   };
 }
 
-function reconcileItems(list, ring) {
-  const env = { now: performance.now(), ring };
+function reconcileItems(list, ring, view) {
+  const env = { now: performance.now(), ring, view };
   const seen = new Set();
   for (const def of list) {
     seen.add(def.id);
@@ -76,7 +76,7 @@ function reconcileCursors(defs) {
 async function renderLoop() {
   try {
     const st = await fetch("/state", { cache: "no-store" }).then((r) => r.json());
-    reconcileItems(st.items || [], st.ring || DEFAULT_RING);
+    reconcileItems(st.items || [], st.ring || DEFAULT_RING, st.view || {});
     if (!HIDE_CURSORS) reconcileCursors(st.cursors || {});
   } catch (e) { /* servidor no disponible; se reintenta el siguiente frame */ }
   requestAnimationFrame(renderLoop);

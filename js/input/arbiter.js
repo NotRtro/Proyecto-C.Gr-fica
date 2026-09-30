@@ -9,12 +9,14 @@
 //   explode-pending  pinch en vacio: todavia no se sabe si es un arrastre horizontal
 //   explode          pinch en vacio + arrastre horizontal = explode/assemble
 //   none             pinch sin efecto (vertical en vacio, o sobra una mano)
-//   locked           el arbitro esta bloqueado (menu abierto, fase 5)
+//   ui               pinch sobre la interfaz (menu): no toca la escena
+//   locked           el arbitro esta bloqueado (menu abierto)
 //
 // adapter = {
 //   hitTest(x, y) -> item | null     findItem(id) -> item | null
 //   findExplodable() -> item | null  canRotate(item) -> bool
 //   onMoved(item)   onGrab(item, on)   onTap(item)   emit(evento, payload)
+//   isUiAt(x, y) -> bool   (opcional: hay interfaz encima de la escena en ese punto)
 // }
 // Los items son objetos con x, y (px), scale, ry y, si explotan, explodeTarget.
 import { dist } from "../core/util.js";
@@ -125,8 +127,9 @@ export function createArbiter(adapter) {
   function onPinchStart(h, r, now) {
     r.pinchT = now;
     r.start = { x: h.ax, y: h.ay };
-    adapter.emit("cursor:pinch-start", { hand: h.id, x: h.ax, y: h.ay });
+    adapter.emit("cursor:pinch-start", { hand: h.id, x: h.ax, y: h.ay, source: h.source, spanPx: h.spanPx });
     if (locked) { r.role = "locked"; return; }
+    if (adapter.isUiAt && adapter.isUiAt(h.ax, h.ay)) { r.role = "ui"; return; }
 
     const item = adapter.hitTest(h.ax, h.ay);
     const holder = [...hands.values()].find((o) => o !== r && o.role === "grab");
@@ -177,7 +180,7 @@ export function createArbiter(adapter) {
     const still = dist(r.start, { x: h.ax, y: h.ay }) < TAP.MAX_PX;
     const tappable = r.role !== "two-hand" && r.role !== "explode";
     if (allowTap && tappable && quick && still) {
-      const item = locked ? null : adapter.hitTest(r.start.x, r.start.y);
+      const item = locked || r.role === "ui" ? null : adapter.hitTest(r.start.x, r.start.y);
       if (item) adapter.onTap(item);
       adapter.emit("cursor:tap", { hand: h.id, item, x: r.start.x, y: r.start.y });
     }
@@ -185,7 +188,7 @@ export function createArbiter(adapter) {
     else if (r.role === "explode") { r.role = "idle"; r.itemId = null; }
     else release(r);
     r.role = "idle";
-    adapter.emit("cursor:pinch-end", { hand: h.id });
+    adapter.emit("cursor:pinch-end", { hand: h.id, x: h.ax, y: h.ay, removed: !!h.removed });
   }
 
   // ---- API ----------------------------------------------------------------
@@ -198,7 +201,6 @@ export function createArbiter(adapter) {
       if (h.pinchChanged === "start") onPinchStart(h, r, now);
       if (h.pinched && h.present && h.pinchChanged !== "end") onPinchHold(h, r);
       if (h.pinchChanged === "end") onPinchEnd(h, r, now, !h.removed);
-      if (h.palmFired) adapter.emit("gesture:palm", { hand: h.id, handedness: h.handedness });
       if (h.removed) hands.delete(h.id);
     }
     if (session) updateSession();

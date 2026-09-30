@@ -10,13 +10,19 @@
 //                 arrastraria el objeto o arruinaria un tap)
 //   pinched       pinch confirmado
 //   pinchChanged  "start" | "end" | null (solo en el frame en que cambia)
-//   palmProgress  0..1 de la palma abierta sostenida; palmFired true al completarla
+//   spanPx        tamano de la mano en pantalla (muneca -> nudillo del medio), para
+//                 umbrales relativos: una mano lejos de la camara es mas chica
 //   removed       true en el ultimo estado de una mano que se fue
 //   metrics       metricas crudas (HUD)
+//
+// La posicion del cursor pasa por un filtro One Euro (js/input/filters.js): sin
+// el, el ruido de MediaPipe hace temblar el cursor y el resaltado salta entre
+// botones vecinos.
 import { midpoint } from "../core/util.js";
+import { CURSOR_FILTER } from "../core/config.js";
 import { toScreen } from "./coords.js";
+import { createPointFilter } from "./filters.js";
 import { pinchMetrics, createPinchState, stepPinch } from "./recognizers/pinch.js";
-import { createPalmState, stepPalm } from "./recognizers/palm.js";
 
 export function createGestureEngine() {
   const per = new Map();
@@ -25,9 +31,8 @@ export function createGestureEngine() {
   function snapshot(id, s, extra) {
     return {
       id, source: "hand", handedness: s.handedness, present: s.present,
-      x: s.x, y: s.y, ax: s.ax, ay: s.ay,
+      x: s.x, y: s.y, ax: s.ax, ay: s.ay, spanPx: s.spanPx,
       pinched: s.pinch.pinched, pinchChanged: null,
-      palmProgress: s.palm.progress, palmFired: false,
       removed: false, metrics: s.metrics, ...extra,
     };
   }
@@ -40,25 +45,31 @@ export function createGestureEngine() {
       seen.add(t.id);
       let s = per.get(t.id);
       if (!s) {
-        s = { pinch: createPinchState(), palm: createPalmState(), x: 0, y: 0, ax: 0, ay: 0, metrics: null };
+        s = { pinch: createPinchState(), filter: createPointFilter(CURSOR_FILTER),
+          x: 0, y: 0, ax: 0, ay: 0, spanPx: 0, metrics: null };
         per.set(t.id, s);
       }
       s.handedness = t.handedness;
       s.present = t.present;
-      let change = null, palmFired = false;
+      let change = null;
       if (t.present) {
         const m = pinchMetrics(t.lm, video);
         change = stepPinch(s.pinch, m);
-        const pos = midpoint(toScreen(t.lm[8], video, view), toScreen(t.lm[4], video, view));
+        const raw = midpoint(toScreen(t.lm[8], video, view), toScreen(t.lm[4], video, view));
+        // Al confirmarse el pinch, el punto medio ya salto (los dedos se juntaron):
+        // se reinicia el filtro para que la manipulacion parta de la posicion real
+        // y el objeto no "derive" mientras el filtro alcanza el salto.
+        if (change === "start") s.filter.reset();
+        const pos = s.filter.filter(raw, now);
+        s.spanPx = m.span * Math.max(view.w / video.videoWidth, view.h / video.videoHeight);
         s.x = pos.x; s.y = pos.y;
         // El ancla sigue al cursor salvo mientras se suelta el pinch, incluido el
         // frame en que se confirma "end" (el arbitro mide el tap con ese valor).
         const releasing = (s.pinch.pinched && !s.pinch.raw) || change === "end";
         if (!releasing) { s.ax = pos.x; s.ay = pos.y; }
         s.metrics = m;
-        palmFired = stepPalm(s.palm, m, pos, now, s.pinch.pinched);
       }
-      out.push(snapshot(t.id, s, { pinchChanged: change, palmFired }));
+      out.push(snapshot(t.id, s, { pinchChanged: change }));
     }
     for (const [id, s] of per) {
       if (seen.has(id)) continue;
@@ -74,7 +85,7 @@ export function createGestureEngine() {
 
   // Frame de pantalla SIN camara nueva: mismos estados, sin transiciones.
   function repeat() {
-    return last.filter((h) => !h.removed).map((h) => ({ ...h, pinchChanged: null, palmFired: false }));
+    return last.filter((h) => !h.removed).map((h) => ({ ...h, pinchChanged: null }));
   }
 
   function reset() { per.clear(); last = []; }

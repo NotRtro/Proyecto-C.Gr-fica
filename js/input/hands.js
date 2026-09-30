@@ -58,11 +58,18 @@ export function createHandTracker() {
   return { update, reset() { tracks = []; } };
 }
 
+// MediaPipe calcula Left/Right suponiendo que la imagen viene espejada (selfie).
+// El tracker le pasa el video SIN espejar (el espejo es solo CSS), asi que la
+// etiqueta sale invertida: se corrige aqui para que "Right" sea la mano derecha
+// real del usuario.
+const SWAP = { Left: "Right", Right: "Left" };
+
 // Convierte el resultado de HandLandmarker.detectForVideo al formato de entrada.
 export function detectionsFromMediaPipe(res) {
   const hands = res.landmarks || [];
   const handedness = res.handedness || [];
-  return hands.map((lm, i) => ({
-    lm, label: (handedness[i] && handedness[i][0] && handedness[i][0].categoryName) || null,
-  }));
+  return hands.map((lm, i) => {
+    const raw = handedness[i] && handedness[i][0] && handedness[i][0].categoryName;
+    return { lm, label: SWAP[raw] || null };
+  });
 }

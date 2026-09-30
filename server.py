@@ -19,21 +19,24 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent
 STATE_DIR = REPO_ROOT / "state"
 JS_ROOT = (REPO_ROOT / "js").resolve()
+CSS_ROOT = (REPO_ROOT / "css").resolve()
 RECORDINGS_ROOT = (REPO_ROOT / "tests" / "recordings").resolve()
 
 # MIME explicito: en Windows el registro puede mapear .js a text/plain, y los
 # modulos ES exigen un tipo JavaScript. Solo se sirven extensiones listadas aqui.
 _JS_TYPES = {".js": "text/javascript; charset=utf-8"}
 _JSON_TYPES = {".json": "application/json; charset=utf-8"}
+_CSS_TYPES = {".css": "text/css; charset=utf-8"}
 
 # Prefijo URL -> (carpeta, extensiones permitidas). Solo lectura, sin listados.
 _STATIC_ROUTES = {
     "/js/": (JS_ROOT, _JS_TYPES),
+    "/css/": (CSS_ROOT, _CSS_TYPES),
     "/recordings/": (RECORDINGS_ROOT, _JSON_TYPES),
 }
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "name": "Assistant",
+    "name": "HeyTECHI",
     "port": 8794,
     "orbs": [
         {"title": "Notes", "path": "sample-notes", "kind": "notes"},
@@ -186,7 +189,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == "/config":
             self._send_json({
-                "name": CFG.get("name", "Assistant"),
+                "name": CFG.get("name", "HeyTECHI"),
                 "orbs": [
                     {"title": o.get("title", ""), "kind": o.get("kind", "")}
                     for o in CFG.get("orbs", []) if isinstance(o, dict)

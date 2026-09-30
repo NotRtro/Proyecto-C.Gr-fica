@@ -39,11 +39,20 @@ export function frameToDetections(frame) {
 // onLoop() se llama al empezar cada vuelta (incluida la primera) para que el
 // tracker reinicie la escena: los gestos son relativos, y sin reinicio cada
 // vuelta acumularia su efecto (escala x2, x4, ...).
-export function createReplaySource(rec, { loopGapMs = 600, onLoop = () => {} } = {}) {
+//
+// step: true = modo CUADRO A CUADRO: cada llamada avanza exactamente un frame de
+// la grabacion y clock() devuelve el tiempo de la grabacion (no el del reloj).
+// El resultado no depende de la velocidad del navegador: si la pagina pinta a
+// saltos (pestana en segundo plano, panel de pruebas), igual no se pierde ningun
+// gesto. Se activa con ?replay=<nombre>&step=1.
+export function createReplaySource(rec, { loopGapMs = 600, onLoop = () => {}, step = false } = {}) {
   const video = { videoWidth: rec.video.w, videoHeight: rec.video.h };
   const lastT = rec.frames.length ? rec.frames[rec.frames.length - 1].t : 0;
+  const FRAME_MS = 33;
   let t0 = null, idx = -1;
-  function next(now) {
+  let base = 0, gap = 0, vt = 0; // modo cuadro a cuadro
+
+  function nextRealtime(now) {
     if (t0 === null) { t0 = now; onLoop(); }
     const el = now - t0;
     if (el > lastT + loopGapMs) { t0 = now; idx = -1; onLoop(); return []; }
@@ -53,7 +62,25 @@ export function createReplaySource(rec, { loopGapMs = 600, onLoop = () => {} } =
     idx = j;
     return frameToDetections(rec.frames[j]);
   }
-  return { video, next };
+
+  function nextStep() {
+    if (idx === -1 && gap === 0) onLoop();
+    if (idx + 1 < rec.frames.length) {
+      idx++;
+      vt = base + rec.frames[idx].t;
+      return frameToDetections(rec.frames[idx]);
+    }
+    // pausa entre vueltas: frames sin manos
+    vt += FRAME_MS;
+    if (++gap * FRAME_MS >= loopGapMs) { base = vt + FRAME_MS; idx = -1; gap = 0; }
+    return [];
+  }
+
+  return {
+    video, step,
+    next: step ? nextStep : nextRealtime,
+    clock: (now) => (step ? vt : now),
+  };
 }
 
 export async function loadRecording(name) {

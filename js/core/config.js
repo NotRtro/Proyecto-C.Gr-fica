@@ -19,12 +19,34 @@ export const HANDS = {
   HANDEDNESS_WINDOW: 8,  // frames para votar la lateralidad (Left/Right)
 };
 
-// Palma abierta sostenida (reservado para abrir el menu en la fase 5).
-export const PALM = {
-  EXT_MIN: 1.55,    // cada dedo: dist(punta, muneca) / dist(nudillo, muneca)
-  SPREAD_MIN: 0.6,  // separacion pulgar-indice / span de la mano
-  HOLD_MS: 1000,
-  STILL_PX: 60,     // si la mano se mueve mas que esto, el conteo se reinicia
+// Suavizado del cursor de mano (filtro One Euro, js/input/filters.js).
+// Recalibrar con grabaciones reales (tecla G) si se siente lento o tembloroso.
+export const CURSOR_FILTER = { minCutoff: 1.2, beta: 0.012, dCutoff: 1.0 };
+
+// Click vs arrastre en la interfaz (js/ui/press.js). Los recorridos para la mano
+// son relativos a su tamano en pantalla (span = muneca -> nudillo del medio).
+export const UI_PRESS = {
+  CLICK_MAX_MS: 700,       // un grab mas largo que esto no es click
+  HOLD_TO_DRAG_MS: 450,    // mantener quieto este tiempo "levanta" el orbe/panel para moverlo
+  TRAVEL_SPAN: 0.5,        // recorrido maximo de un click = 0.5 x span de la mano...
+  TRAVEL_MIN: 30, TRAVEL_MAX: 70, // ...acotado a este rango en px
+  MOUSE_TRAVEL: 8,         // el mouse no tiembla: umbral fijo y arrastre inmediato
+  SHOW_PROGRESS_FROM: 0.3, // el anillo de "levantar" aparece desde este progreso (evita parpadeo en clicks)
+};
+
+// A que boton apunta la mano (js/ui/targeting.js, docs/14 paso B).
+export const UI_TARGET = {
+  INTENT_MS: 350,     // al hacer pinch se elige lo mas apuntado en esta ventana PREVIA...
+  INTENT_SKIP_MS: 100, // ...sin contar los ultimos ms (los dedos ya se estaban juntando y el cursor saltaba)
+  HISTORY_MS: 500,    // cuanto historial de apuntado se guarda por mano
+  HYSTERESIS_PX: 10,  // para cambiar de boton hay que salir del actual por esta distancia
+  NEAR_PX: 14,        // en un hueco entre filas, vale el boton mas cercano a esta distancia
+  MAGNET: 0.7,        // cuanto se centra el cursor visible en la fila apuntada (0..1)
+  // Seleccion por permanencia (opcional, Ajustes): dejar el cursor quieto sobre un
+  // boton del menu lo pulsa sin pinch.
+  DWELL_MS: 800,
+  DWELL_MOVE_PX: 40,  // si el cursor se mueve mas que esto, el conteo se reinicia
+  DWELL_SHOW_FROM: 0.2, // el anillo de permanencia aparece desde este progreso
 };
 
 export const TWO_HAND = {
@@ -51,7 +73,6 @@ export const PUSH_HZ = 30; // publicaciones de /state por segundo
 
 export const RING_PX = 440;
 export const RING_COLORS = { idle: "#7c93a8", listening: "#33d1ff", thinking: "#ffb238", speaking: "#33ff9c" };
-export const RING_POLL_MS = 750;
 
 export const MODEL_PX = 480;
 

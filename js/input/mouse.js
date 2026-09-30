@@ -33,7 +33,7 @@ export function createMouseInput({ onWheel }) {
     return {
       id: "mouse", source: "mouse", handedness: "mouse", present: true,
       x, y, ax, ay, pinched, pinchChanged: change,
-      palmProgress: 0, palmFired: false, removed: false, metrics: null,
+      removed: false, metrics: null,
     };
   }
 

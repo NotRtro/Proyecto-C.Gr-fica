@@ -133,9 +133,9 @@ export function scenarios() {
     out.hand_swap = tl.build();
   }
 
-  // 6. Palma abierta 1.6 s = 1 evento; cerrar y abrir 0.6 s = ninguno mas.
+  // 6. Prueba negativa: mano abierta y quieta (palma a la camara) = ningun evento.
   {
-    const tl = createTimeline("palma abierta sostenida (dispara 1 vez) y palma corta (no dispara)");
+    const tl = createTimeline("palma abierta quieta y mano relajada: no debe dispararse nada");
     tl.repeat(48, () => [hand("palm", 900, 400)]);
     tl.repeat(6, () => [hand("open", 900, 400)]);
     tl.repeat(18, () => [hand("palm", 900, 400)]);
@@ -143,5 +143,91 @@ export function scenarios() {
     out.palm = tl.build();
   }
 
+  // 7. Menu (docs/14 paso A): grab RAPIDO sobre el orbe HeyTECHI con temblor de
+  //    +-6 px = click (abre el menu). El orbe esta en (48,216) y mide 128 px.
+  {
+    const rand = seededJitter(3);
+    const tl = createTimeline("grab rapido sobre el orbe con temblor: abre el menu");
+    tl.repeat(10, () => [hand("open", 112 + rand(), 280 + rand())]);
+    tl.repeat(5, () => [hand("pinch", 112 + rand(), 280 + rand())]);
+    tl.repeat(30, () => [hand("open", 112 + rand(), 280 + rand())]);
+    out.menu_orb_click = tl.build();
+  }
+
+  // 8. Menu: MANTENER el grab sobre el orbe (~0.6 s, se "levanta") y moverlo:
+  //    el orbe se mueve y el menu NO se abre.
+  {
+    const rand = seededJitter(5);
+    const tl = createTimeline("mantener grab sobre el orbe y arrastrarlo: se mueve sin abrir el menu");
+    tl.repeat(10, () => [hand("open", 112 + rand(), 280 + rand())]);
+    tl.repeat(20, () => [hand("pinch", 112 + rand(), 280 + rand())]);
+    tl.repeat(20, (i, n) => [hand("pinch", lerp(112, 360, i / (n - 1)) + rand(), lerp(280, 480, i / (n - 1)) + rand())]);
+    tl.repeat(6, () => [hand("pinch", 360 + rand(), 480 + rand())]);
+    tl.repeat(15, () => [hand("open", 360 + rand(), 480 + rand())]);
+    out.menu_orb_drag = tl.build();
+  }
+
+  // 9. Menu (docs/14 paso B): abrir el menu y elegir filas con la mano.
+  //    Con la mano ABIERTA el cursor queda (-25, +25) px respecto del punto de
+  //    pinch; al juntar los dedos salta (+25, -25). La mano llega a "Vista" desde
+  //    ABAJO (queda resaltada) y apunta a su parte alta (y=402): al juntar los
+  //    dedos el cursor cae en "Herramientas", fuera incluso de la histeresis, y
+  //    aun asi debe desplegarse Vista (punto de intencion). Luego pulsa
+  //    "Depuracion". Posiciones medidas con el panel en (206,199), 1280x720.
+  {
+    const rand = seededJitter(9);
+    const J = 25; // salto del cursor al juntar los dedos
+    const aim = (cx, cy) => [cx + J, cy - J]; // punto de pinch para que el cursor abierto quede en (cx, cy)
+    const tl = createTimeline("abrir menu, desplegar Vista apuntando a su borde alto, pulsar Depuracion");
+    const orb = aim(118, 286), below = aim(370, 530), vista = aim(370, 402), debug = aim(380, 597);
+    const still = (n, pose, [x, y]) => tl.repeat(n, () => [hand(pose, x + rand(), y + rand())]);
+    const move = (n, [x0, y0], [x1, y1]) =>
+      tl.repeat(n, (i, m) => [hand("open", lerp(x0, x1, i / (m - 1)) + rand(), lerp(y0, y1, i / (m - 1)) + rand())]);
+    still(10, "open", orb); still(4, "pinch", orb); still(8, "open", orb);
+    move(12, orb, below); move(8, below, vista); still(12, "open", vista); still(4, "pinch", vista); still(10, "open", vista);
+    move(10, vista, debug); still(12, "open", debug); still(4, "pinch", debug); still(15, "open", debug);
+    out.menu_select = tl.build();
+  }
+
+  // 10. Menu (docs/14 paso C, M5): con "Seleccionar dejando el cursor quieto"
+  //     activado, abrir el menu con pinch y luego elegir Vista y Depuracion SIN
+  //     pinch, solo dejando la mano quieta ~1 s (temblor de +-6 px).
+  {
+    const rand = seededJitter(10);
+    const J = 25;
+    const aim = (cx, cy) => [cx + J, cy - J];
+    const tl = createTimeline("permanencia: abrir menu con pinch, elegir Vista y Depuracion dejando la mano quieta");
+    const orb = aim(118, 286), below = aim(370, 530), vista = aim(370, 418), debug = aim(380, 597);
+    const still = (n, pose, [x, y]) => tl.repeat(n, () => [hand(pose, x + rand(), y + rand())]);
+    const move = (n, [x0, y0], [x1, y1]) =>
+      tl.repeat(n, (i, m) => [hand("open", lerp(x0, x1, i / (m - 1)) + rand(), lerp(y0, y1, i / (m - 1)) + rand())]);
+    still(8, "open", orb); still(4, "pinch", orb); still(4, "open", orb);
+    move(10, orb, below); move(6, below, vista); still(32, "open", vista);
+    move(8, vista, debug); still(32, "open", debug);
+    out.menu_dwell = tl.build();
+  }
+
+  // 11. Calibracion (docs/14 paso D): el protocolo del asistente con valores
+  //     CONOCIDOS para verificar que el analisis los recupera. Mano abierta:
+  //     ratio 0.707; pinch: 0.071; salto del cursor al juntar los dedos: 35 px;
+  //     temblor uniforme de +-3 px.
+  {
+    const rand = seededJitter(11, 3);
+    const tl = createTimeline("calibracion: 3 s abierta y quieta, 2 s en pinch, 4 pinch y soltar");
+    const P = [640, 360];
+    const still = (n, pose) => tl.repeat(n, () => [hand(pose, P[0] + rand(), P[1] + rand())]);
+    still(90, "open");
+    still(60, "pinch");
+    for (let k = 0; k < 4; k++) { still(10, "open"); still(10, "pinch"); }
+    still(10, "open");
+    out.calibration = tl.build();
+  }
+
   return out;
+}
+
+// Temblor determinista de +-6 px (mano real sostenida en el aire).
+function seededJitter(seed, amp = 6) {
+  let s = seed >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return (s / 4294967296 * 2 - 1) * amp; };
 }

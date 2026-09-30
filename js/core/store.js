@@ -4,7 +4,7 @@ export const store = {
   items: [],
   hands: [],        // estados de mano del ultimo frame (js/input/gestures.js + mouse)
   landmarker: null,
-  cfg: { name: "Assistant", orbs: [] },
+  cfg: { name: "HeyTECHI", orbs: [] },
   ring: { state: "idle", mood: "green", wave: [] },
   showHud: false,
 };

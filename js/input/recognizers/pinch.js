@@ -5,7 +5,7 @@ import { PINCH } from "../../core/config.js";
 import { toVideoPx } from "../coords.js";
 
 // Cuanto se extiende cada dedo: dist(punta, muneca) / dist(nudillo, muneca).
-// ~1.0 = doblado, ~1.8+ = estirado. Compartido con el reconocedor de palma.
+// ~1.0 = doblado, ~1.8+ = estirado.
 export function fingerExtensions(P) {
   const ext = (tip, mcp) => dist(P[tip], P[0]) / Math.max(dist(P[mcp], P[0]), 1e-3);
   return { f8: ext(8, 5), f12: ext(12, 9), f16: ext(16, 13), f20: ext(20, 17) };
