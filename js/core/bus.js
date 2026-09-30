@@ -1,14 +1,19 @@
 // Bus de eventos minimo. Permite que modulos futuros (menu, ayuda, arbitro de
 // gestos) reaccionen a lo que pasa sin que el nucleo los conozca.
 //
-// Eventos emitidos hoy:
-//   item:added    item
-//   item:removed  item
-//   cursor:pinch-start  { cursor }
-//   cursor:pinch-end    { cursor }
-//   cursor:tap          { cursor, item }   (item puede ser null)
-//   grab:start          { cursor, item }
-//   grab:end            { cursor, item }
+// Eventos emitidos hoy (hand = ID de la mano: "h1", "h2"... o "mouse"):
+//   item:added          item
+//   item:removed        item
+//   cursor:pinch-start  { hand, x, y }
+//   cursor:pinch-end    { hand }
+//   cursor:tap          { hand, item, x, y }   (item null si no habia nada o el arbitro esta bloqueado)
+//   grab:start          { hand, item }
+//   grab:end            { hand, item }
+//   twohand:start       { item }
+//   twohand:end         { item }
+//   explode:start       { item }
+//   gesture:palm        { hand, handedness }   (palma abierta sostenida)
+//   arbiter:locked      { locked }
 const handlers = new Map();
 
 export function on(evt, fn) {

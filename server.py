@@ -19,10 +19,18 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent
 STATE_DIR = REPO_ROOT / "state"
 JS_ROOT = (REPO_ROOT / "js").resolve()
+RECORDINGS_ROOT = (REPO_ROOT / "tests" / "recordings").resolve()
 
 # MIME explicito: en Windows el registro puede mapear .js a text/plain, y los
 # modulos ES exigen un tipo JavaScript. Solo se sirven extensiones listadas aqui.
 _JS_TYPES = {".js": "text/javascript; charset=utf-8"}
+_JSON_TYPES = {".json": "application/json; charset=utf-8"}
+
+# Prefijo URL -> (carpeta, extensiones permitidas). Solo lectura, sin listados.
+_STATIC_ROUTES = {
+    "/js/": (JS_ROOT, _JS_TYPES),
+    "/recordings/": (RECORDINGS_ROOT, _JSON_TYPES),
+}
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "name": "Assistant",
@@ -195,9 +203,10 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/media/"):
             super().do_GET()
             return
-        if path.startswith("/js/"):
-            self._serve_js(path)
-            return
+        for prefix, (root, types) in _STATIC_ROUTES.items():
+            if path.startswith(prefix):
+                self._serve_static(path[len(prefix):], root, types)
+                return
         self.send_error(404)
 
     def _send_file(self, file_path: Path, content_type: str) -> None:
@@ -216,16 +225,17 @@ class Handler(SimpleHTTPRequestHandler):
     def _serve_stage_html(self) -> None:
         self._send_file(REPO_ROOT / "stage.html", "text/html; charset=utf-8")
 
-    def _serve_js(self, url_path: str) -> None:
-        """Modulos del cliente. Misma jaula que /media/*: nada fuera de js/."""
-        rel = urllib.parse.unquote(url_path[len("/js/"):])
-        candidate = (JS_ROOT / rel).resolve()
+    def _serve_static(self, rel_url: str, root: Path, types: dict[str, str]) -> None:
+        """Archivos de solo lectura (modulos js/, grabaciones de gestos). Misma
+        jaula que /media/*: nada fuera de `root`, solo extensiones de `types`."""
+        rel = urllib.parse.unquote(rel_url)
+        candidate = (root / rel).resolve()
         try:
-            candidate.relative_to(JS_ROOT)
+            candidate.relative_to(root)
         except ValueError:
             self.send_error(404)
             return
-        content_type = _JS_TYPES.get(candidate.suffix.lower())
+        content_type = types.get(candidate.suffix.lower())
         if content_type is None or not candidate.is_file():
             self.send_error(404)
             return

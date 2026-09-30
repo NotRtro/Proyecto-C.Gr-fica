@@ -1,7 +1,7 @@
 // Operaciones de escena del tracker: poblar al arrancar, limpiar, reiniciar.
 import { store } from "../core/store.js";
 import { spawnItem, removeItem, findByType, keepsOnClear, applyTransform } from "../items/registry.js";
-import { endGrab } from "../input/cursors.js";
+import { input } from "./interaction.js";
 
 export function spawnStage() {
   spawnItem("widget", { id: "ring" });
@@ -9,10 +9,10 @@ export function spawnStage() {
 }
 
 export function clearAll() {
+  input.arbiter.releaseAll();
   for (const it of [...store.items]) {
     if (!keepsOnClear(it)) removeItem(it);
   }
-  for (const c of Object.values(store.cursors)) endGrab(c);
 }
 
 export function resetAll() {

@@ -1,0 +1,10 @@
+{
+  "name": "barehands-web",
+  "private": true,
+  "description": "Cliente web de barehands. Sin dependencias ni build: package.json solo existe para que Node trate js/ como modulos ES y para los scripts de tests.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run.mjs",
+    "recordings": "node tests/make-recordings.mjs"
+  }
+}

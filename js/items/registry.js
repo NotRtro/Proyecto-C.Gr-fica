@@ -9,6 +9,8 @@
 //   onTap(item)           opcional: reaccion a un tap
 //   dispose(item)         opcional: liberar recursos (WebGL, video...)
 //   grabbable             default true: se puede agarrar con pinch
+//   rotatable             default false: dos manos / Shift+rueda cambian item.ry
+//   explodable            default false: responde a explode (comando o pinch en vacio + arrastre)
 //   keepOnClear           default false: sobrevive al comando "clear"
 //   defaultPos            {x, y} en fraccion de pantalla
 //   defaultTitle
@@ -21,7 +23,10 @@ import { emit } from "../core/bus.js";
 const TYPES = new Map();
 
 export function registerItemType(type, def) {
-  TYPES.set(type, { grabbable: true, keepOnClear: false, defaultPos: { x: 0.5, y: 0.5 }, ...def });
+  TYPES.set(type, {
+    grabbable: true, rotatable: false, explodable: false, keepOnClear: false,
+    defaultPos: { x: 0.5, y: 0.5 }, ...def,
+  });
 }
 
 export function getItemType(type) { return TYPES.get(type); }
@@ -68,10 +73,13 @@ export function removeItem(item) {
 export function findItem(id) { return store.items.find((it) => it.id === id); }
 export function findByType(type) { return store.items.find((it) => it.type === type); }
 
-export function isGrabbable(item) {
+function typeFlag(item, flag) {
   const T = TYPES.get(item.type);
-  return !!T && T.grabbable !== false;
+  return !!T && !!T[flag];
 }
+export function isGrabbable(item) { return typeFlag(item, "grabbable"); }
+export function isRotatable(item) { return typeFlag(item, "rotatable"); }
+export function findExplodable() { return store.items.find((it) => typeFlag(it, "explodable")); }
 
 export function keepsOnClear(item) {
   const T = TYPES.get(item.type);
@@ -79,11 +87,13 @@ export function keepsOnClear(item) {
 }
 
 // Formato de cable de /state (docs/07): coordenadas en fraccion de pantalla.
+// g = 1 si alguna mano lo tiene agarrado (lo lee bin/board-state.sh).
 export function serializeItem(it) {
   return {
     id: it.id, type: it.type, title: it.title || "", body: it.body || "", src: it.src || "",
     x: it.x / innerWidth, y: it.y / innerHeight, scale: it.scale || 1,
     rx: it.rx || 0, ry: it.ry || 0, rz: it.rz || 0,
     explode: it.explode || 0, dissolve: it.dissolve || 0,
+    g: it.grabbed ? 1 : 0,
   };
 }

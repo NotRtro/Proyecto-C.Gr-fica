@@ -15,6 +15,8 @@ function setUniforms(view, t, explode, dissolve) {
 registerItemType("holo", {
   defaultPos: { x: 0.5, y: 0.45 },
   defaultTitle: "Reactor",
+  rotatable: true,
+  explodable: true,
   build() {
     const el = document.createElement("div");
     el.className = "modelcard";
@@ -38,7 +40,8 @@ registerItemType("holo", {
     item.dissolve = 0; item.dissolveTarget = 0;
   },
   update(item, dt, now) {
-    item.ry += HOLO.SPIN * dt;
+    // El giro automatico se pausa mientras se rota con dos manos.
+    if (!item.manipulated) item.ry += HOLO.SPIN * dt;
     item.view.group.rotation.y = item.ry;
     item.explode += (item.explodeTarget - item.explode) * (1 - Math.exp(-HOLO.EXPLODE_RATE * dt));
     item.dissolve += (item.dissolveTarget - item.dissolve) * (1 - Math.exp(-HOLO.DISSOLVE_RATE * dt));

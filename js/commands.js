@@ -2,7 +2,7 @@
 // contra su allowlist (_ALLOWED en server.py); aqui se define que hace cada una.
 // Acciones permitidas por el servidor pero sin handler se ignoran (console.debug).
 import { HOLO } from "./core/config.js";
-import { spawnItem, findByType } from "./items/registry.js";
+import { spawnItem, findByType, findExplodable } from "./items/registry.js";
 import { clearAll, resetAll } from "./stage/scene.js";
 
 const COMMANDS = new Map();
@@ -24,5 +24,5 @@ registerCommand("reset", () => resetAll());
 registerCommand("hand", (c) => {
   if (!findByType("holo")) spawnItem("holo", { title: c.title, x: c.x, y: c.y });
 });
-registerCommand("explode", () => { const h = findByType("holo"); if (h) h.explodeTarget = HOLO.EXPLODE_OUT; });
-registerCommand("assemble", () => { const h = findByType("holo"); if (h) h.explodeTarget = 0.0; });
+registerCommand("explode", () => { const h = findExplodable(); if (h) h.explodeTarget = HOLO.EXPLODE_OUT; });
+registerCommand("assemble", () => { const h = findExplodable(); if (h) h.explodeTarget = 0.0; });

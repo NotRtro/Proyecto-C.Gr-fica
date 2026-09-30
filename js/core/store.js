@@ -2,7 +2,7 @@
 // `store.items` (se usa splice) para que todos vean siempre el mismo arreglo.
 export const store = {
   items: [],
-  cursors: {},
+  hands: [],        // estados de mano del ultimo frame (js/input/gestures.js + mouse)
   landmarker: null,
   cfg: { name: "Assistant", orbs: [] },
   ring: { state: "idle", mood: "green", wave: [] },
