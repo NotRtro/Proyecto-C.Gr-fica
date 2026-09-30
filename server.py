@@ -18,6 +18,11 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent
 STATE_DIR = REPO_ROOT / "state"
+JS_ROOT = (REPO_ROOT / "js").resolve()
+
+# MIME explicito: en Windows el registro puede mapear .js a text/plain, y los
+# modulos ES exigen un tipo JavaScript. Solo se sirven extensiones listadas aqui.
+_JS_TYPES = {".js": "text/javascript; charset=utf-8"}
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "name": "Assistant",
@@ -190,21 +195,41 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/media/"):
             super().do_GET()
             return
+        if path.startswith("/js/"):
+            self._serve_js(path)
+            return
         self.send_error(404)
 
-    def _serve_stage_html(self) -> None:
-        file_path = REPO_ROOT / "stage.html"
+    def _send_file(self, file_path: Path, content_type: str) -> None:
         try:
             body = file_path.read_bytes()
         except OSError:
             self.send_error(404)
             return
         self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _serve_stage_html(self) -> None:
+        self._send_file(REPO_ROOT / "stage.html", "text/html; charset=utf-8")
+
+    def _serve_js(self, url_path: str) -> None:
+        """Modulos del cliente. Misma jaula que /media/*: nada fuera de js/."""
+        rel = urllib.parse.unquote(url_path[len("/js/"):])
+        candidate = (JS_ROOT / rel).resolve()
+        try:
+            candidate.relative_to(JS_ROOT)
+        except ValueError:
+            self.send_error(404)
+            return
+        content_type = _JS_TYPES.get(candidate.suffix.lower())
+        if content_type is None or not candidate.is_file():
+            self.send_error(404)
+            return
+        self._send_file(candidate, content_type)
 
     # -- POST ------------------------------------------------------------------
 
