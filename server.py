@@ -49,6 +49,8 @@ _ALLOWED = (
     "add_img", "add_card", "clear", "reset", "hand", "give",
     "yank", "hover", "scroll_note", "widget", "explode", "assemble",
     "present",
+    # fase 6: catalogo 3D
+    "load_model", "remove_model",
 )
 
 _LOCK = threading.Lock()
@@ -134,6 +136,52 @@ def _read_ring_state() -> dict[str, Any]:
     return {"state": state, "mood": mood, "wave": wave}
 
 
+MODEL_EXTS = (".glb", ".gltf")
+MODELS_DIR = "models"
+
+
+def list_models() -> list[dict[str, Any]]:
+    """Catalogo de modelos 3D en <media>/models (docs/13, fase 6).
+
+    Acepta dos formas:
+      models/Buggy.glb                (+ opcional models/Buggy.json con el manifest)
+      models/bicicleta/model.glb      (+ opcional models/bicicleta/manifest.json)
+    El manifest puede traer "name", "mode" ("holo" | "solid") y datos de piezas.
+    """
+    root = MEDIA_ROOT / MODELS_DIR
+    if not root.is_dir():
+        return []
+    out: list[dict[str, Any]] = []
+
+    def entry(model: Path, manifest_path: Path, default_name: str) -> dict[str, Any]:
+        manifest: dict[str, Any] = {}
+        if manifest_path.is_file():
+            try:
+                data = json.loads(manifest_path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    manifest = data
+            except (OSError, json.JSONDecodeError):
+                pass
+        return {
+            "id": model.relative_to(root).as_posix(),
+            "name": str(manifest.get("name") or default_name),
+            "src": model.relative_to(MEDIA_ROOT).as_posix(),
+            "bytes": model.stat().st_size,
+            "manifest": manifest,
+        }
+
+    for child in sorted(root.iterdir(), key=lambda c: c.name.lower()):
+        if child.is_file() and child.suffix.lower() in MODEL_EXTS:
+            out.append(entry(child, child.with_suffix(".json"), child.stem))
+        elif child.is_dir():
+            for name in ("model.glb", "model.gltf"):
+                model = child / name
+                if model.is_file():
+                    out.append(entry(model, child / "manifest.json", child.name))
+                    break
+    return out
+
+
 def resolve_media_src(raw: Any) -> str | None:
     """Devuelve el path relativo (posix) dentro de MEDIA_ROOT, o None si se rechaza."""
     if not isinstance(raw, str) or not raw.strip():
@@ -195,6 +243,9 @@ class Handler(SimpleHTTPRequestHandler):
                     for o in CFG.get("orbs", []) if isinstance(o, dict)
                 ],
             })
+            return
+        if path == "/models":
+            self._send_json({"models": list_models()})
             return
         if path == "/orb":
             self._send_json(_read_ring_state())

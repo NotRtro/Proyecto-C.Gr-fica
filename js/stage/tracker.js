@@ -27,6 +27,7 @@ import { toast, showEndScreen, playClick } from "../ui/feedback.js";
 import { pushState, flushState, loadConfig } from "../net/sync.js";
 import { applyCmds } from "../commands.js";
 import { spawnStage, resetAll } from "./scene.js";
+import { refreshCatalog } from "../net/catalog.js";
 import { input, hoverKindAt } from "./interaction.js";
 
 const MEDIAPIPE_VERSION = "0.10.14";
@@ -237,6 +238,7 @@ export async function bootTracker() {
   requestAnimationFrame(frame);
 
   await loadConfig();
+  refreshCatalog(); // nombres del catalogo 3D disponibles desde el inicio
   const calibrateNow = Q.get("calibrar") === "1";
   if (calibrateNow) startCalibration();
   if (REPLAY) await startReplay();

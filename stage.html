@@ -38,6 +38,11 @@
   .modelcard { position: absolute; width: 480px; height: 480px; }
   .modelcard canvas { width: 100%; height: 100%; display: block; }
   .modelcard.grabbed { filter: drop-shadow(0 0 18px rgba(120, 200, 255, 0.45)); }
+  .modelcard.glb { width: 560px; height: 560px; }
+  .model-status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font: 600 14px/1.3 ui-monospace, Consolas, monospace; letter-spacing: 0.12em; color: #7ff4ff;
+    text-shadow: 0 0 10px rgba(95, 227, 255, 0.6); pointer-events: none; }
+  .model-status.error { color: #ff8f8f; text-shadow: none; }
 
   /* Los cursores de mano, el menu, el tutorial y los avisos estan en /css/ui.css. */
 

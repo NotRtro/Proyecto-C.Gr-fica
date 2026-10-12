@@ -76,6 +76,17 @@ export const RING_COLORS = { idle: "#7c93a8", listening: "#33d1ff", thinking: "#
 
 export const MODEL_PX = 480;
 
+// Modelos GLB del catalogo (js/items/model.js, fase 6).
+export const MODEL = {
+  PX: 560,            // lado del canvas de cada modelo (px CSS a escala 1)
+  FIT: 1.3,           // diagonal del modelo en unidades de escena (armado ocupa ~2/3 del cuadro)
+  CAM_DIST: 3.2,      // distancia de la camara (fov 35) con el modelo armado
+  EXPLODE_ZOOM: 0.5,  // al desarmarlo del todo la camara se aleja un 50%: las piezas no se salen del cuadro
+  MAX_IN_SCENE: 3,    // cada modelo usa un contexto WebGL propio: el navegador admite pocos
+  RES_MAX: 2048,      // resolucion maxima del canvas al agrandar el modelo
+  RES_HYSTERESIS: 0.25, // solo se re-dimensiona si la escala cambio mas que esto (y no esta agarrado)
+};
+
 // Mismas tasas que core/hologram.py.
 export const HOLO = {
   SPIN: 0.55,          // rad/s de giro automatico

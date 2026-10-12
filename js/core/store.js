@@ -7,6 +7,7 @@ export const store = {
   cfg: { name: "HeyTECHI", orbs: [] },
   ring: { state: "idle", mood: "green", wave: [] },
   showHud: false,
+  activeId: null,   // ultimo item "explotable" tocado o agregado: Herramientas y explode actuan sobre el
 };
 
 let uid = 1;

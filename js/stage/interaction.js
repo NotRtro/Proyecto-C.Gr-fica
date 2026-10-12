@@ -5,7 +5,7 @@
 // data-ui (menu, pestana del menu, tarjeta del tutorial): un pinch encima nunca
 // agarra ni explota lo que hay detras.
 import { store } from "../core/store.js";
-import { emit } from "../core/bus.js";
+import { emit, on } from "../core/bus.js";
 import {
   applyTransform, findItem, getItemType, isGrabbable, isRotatable, findExplodable,
 } from "../items/registry.js";
@@ -50,3 +50,7 @@ export function hoverKindAt(x, y) {
   if (uiElementAt(x, y)) return "ui";
   return itemAt(x, y) ? "item" : null;
 }
+
+// El ultimo modelo agarrado pasa a ser el "activo" (Herramientas, explode).
+on("grab:start", ({ item }) => { if (item) store.activeId = item.id; });
+on("twohand:start", ({ item }) => { if (item) store.activeId = item.id; });

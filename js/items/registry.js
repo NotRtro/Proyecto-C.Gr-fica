@@ -55,6 +55,7 @@ export function spawnItem(type, def = {}) {
   };
   if (T.init) T.init(item, def);
   store.items.push(item);
+  if (T.explodable) store.activeId = item.id;
   applyTransform(item);
   emit("item:added", item);
   return item;
@@ -79,7 +80,12 @@ function typeFlag(item, flag) {
 }
 export function isGrabbable(item) { return typeFlag(item, "grabbable"); }
 export function isRotatable(item) { return typeFlag(item, "rotatable"); }
-export function findExplodable() { return store.items.find((it) => typeFlag(it, "explodable")); }
+// El modelo sobre el que actuan Herramientas y el explode: el ultimo tocado o
+// agregado (store.activeId) o, si ya no existe, el primero explotable.
+export function findExplodable() {
+  const active = store.items.find((it) => it.id === store.activeId && typeFlag(it, "explodable"));
+  return active || store.items.find((it) => typeFlag(it, "explodable"));
+}
 
 export function keepsOnClear(item) {
   const T = TYPES.get(item.type);

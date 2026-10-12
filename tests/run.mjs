@@ -16,6 +16,7 @@ import { stickyTarget, nearestIn, pickIntent, magnetPoint, createDwell, stepDwel
 import { analyzeHand } from "../js/input/calibration.js";
 import { setSetting } from "../js/core/settings.js";
 import { samplesFromRecording } from "./calibrate.mjs";
+import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VIEW = { w: 1280, h: 720 };
@@ -484,6 +485,39 @@ test("calibracion guardada: se aplica sobre los umbrales y la sensibilidad es re
   setSetting("calibration", null);
   near(PINCH.RATIO_ENTER, 0.35, 1e-9, "de vuelta a fabrica");
   check(UI_TARGET.HYSTERESIS_PX === 10 && UI_PRESS.TRAVEL_MIN === 30, "de vuelta a fabrica");
+});
+
+// ---- catalogo 3D: plan de explode por piezas (js/three/explodePlan.js) -------
+
+console.log("modelos 3D (fase 6):");
+
+test("explode: cada pieza sale en la direccion de su centro, las lejanas viajan mas", () => {
+  const diag = 10;
+  const plan = explodePlan([
+    { center: [2, 0, 0], size: 3 },
+    { center: [-4, 0, 0], size: 3 },
+    { center: [0, 0, 0], size: 1 },
+  ], diag, { spread: 0.9, push: 0.15 });
+  near(plan[0].offset[0], 2 * 0.9 + 1.5, 1e-9, "pieza derecha: x");
+  near(plan[1].offset[0], -(4 * 0.9 + 1.5), 1e-9, "pieza izquierda: sale hacia la izquierda y mas lejos");
+  check(plan[0].offset[1] === 0 && plan[0].offset[2] === 0, "sin movimiento fuera de su direccion");
+  near(plan[2].offset[1], 1.5, 1e-9, "la pieza del centro sale hacia arriba (push x diagonal)");
+});
+
+test("explode: las piezas grandes salen primero y las chicas despues", () => {
+  const plan = explodePlan([
+    { center: [1, 0, 0], size: 1 }, { center: [0, 1, 0], size: 9 }, { center: [0, 0, 1], size: 4 },
+  ], 10, { maxLag: 0.5 });
+  check(plan[1].lag === 0 && plan[0].lag === 0.5 && plan[2].lag === 0.25, "lags: " + plan.map((p) => p.lag).join(","));
+});
+
+test("explode: partFactor va de 0 a 1 con lag, suave y sin pasarse", () => {
+  near(partFactor(0, 0.3), 0, 1e-9, "armado");
+  near(partFactor(1, 0.3), 1, 1e-9, "explotado");
+  near(partFactor(0.3, 0.3), 0, 1e-9, "todavia no empezo (lag)");
+  let prev = 0;
+  for (let f = 0; f <= 1.0001; f += 0.05) { const v = partFactor(f, 0.2); check(v >= prev - 1e-12, "monotono"); prev = v; }
+  near(partFactor(1.5, 0), 1, 1e-9, "no se pasa de 1");
 });
 
 console.log("\n" + passed + " ok, " + failed + " fallas");

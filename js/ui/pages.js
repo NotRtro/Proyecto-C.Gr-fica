@@ -3,9 +3,11 @@
 // seccion nueva: registerMenuPage(id, { title, build(ui) }) y enlazarla desde
 // "root" con ui.page(id, "Titulo").
 import { store } from "../core/store.js";
-import { emit } from "../core/bus.js";
-import { HOLO } from "../core/config.js";
-import { findExplodable, spawnItem, findByType, applyTransform } from "../items/registry.js";
+import { emit, on } from "../core/bus.js";
+import { HOLO, MODEL } from "../core/config.js";
+import { findExplodable, spawnItem, findByType, findItem, removeItem, applyTransform } from "../items/registry.js";
+import { catalog, catalogLoaded, refreshCatalog } from "../net/catalog.js";
+import { addModel } from "../stage/models.js";
 import { cycleCamera } from "../input/camera.js";
 import { resetAll } from "../stage/scene.js";
 import { registerAction } from "./actions.js";
@@ -29,6 +31,23 @@ registerAction("model:reactor", () => {
   if (holo) { centerItem(holo); toast("El reactor ya estaba en escena: lo traje al centro"); }
   else spawnItem("holo", {});
   closeMenu();
+});
+
+// Catalogo 3D (fase 6): agregar / traer al centro / quitar modelos GLB.
+registerAction("model:add", (src) => { addModel(src); closeMenu(); });
+registerAction("model:remove", (id) => {
+  const it = findItem(id);
+  if (it) { removeItem(it); toast("Se quitó " + (it.title || "el modelo")); }
+  refreshMenu();
+});
+registerAction("model:refresh", () => { refreshCatalog().then(refreshMenu); });
+// El catalogo se vuelve a leer cada vez que se abre el menu (por si se agrego un .glb).
+on("menu:open", () => { refreshCatalog().then(refreshMenu); });
+on("model:loaded", ({ item, stats }) => {
+  toast((item.title || "Modelo") + " listo · " + stats.parts + " piezas · " + Math.round(stats.triangles / 1000) + " mil triángulos");
+});
+on("model:error", ({ item }) => {
+  toast("No se pudo cargar " + (item.title || item.src), { kind: "error" });
 });
 
 function withModel(fn) {
@@ -62,13 +81,29 @@ registerMenuPage("root", {
   ],
 });
 
+const mb = (bytes) => (bytes / 1e6).toFixed(1) + " MB";
+const inScene = (src) => store.items.find((it) => it.type === "model" && it.src === src);
+
 registerMenuPage("models", {
   title: "Modelos",
-  build: (ui) => [
-    ui.button({ label: "reactor.holo", action: "model:reactor",
-      hint: findByType("holo") ? "en escena · traer al centro" : "agregar a la escena" }),
-    ui.note("Catálogo GLB (bicicleta…) en la fase 6."),
-  ],
+  build: (ui) => {
+    const rows = [ui.button({ label: "reactor.holo", action: "model:reactor",
+      hint: findByType("holo") ? "en escena · traer al centro" : "integrado · agregar" })];
+    for (const m of catalog()) {
+      rows.push(ui.button({ label: m.name, action: "model:add", arg: m.src,
+        hint: (inScene(m.src) ? "en escena · traer al centro" : "agregar") + " · " + mb(m.bytes) }));
+    }
+    if (!catalogLoaded()) rows.push(ui.note("Leyendo el catálogo…"));
+    else if (!catalog().length) rows.push(ui.note("Pon archivos .glb en media/models para verlos aquí."));
+    const glbCount = store.items.filter((it) => it.type === "model").length;
+    const present = store.items.filter((it) => it.type === "model" || it.type === "holo");
+    if (present.length) {
+      rows.push(ui.section("En escena · modelos GLB " + glbCount + " de " + MODEL.MAX_IN_SCENE));
+      for (const it of present) rows.push(ui.button({ label: "Quitar " + (it.title || "modelo"), action: "model:remove", arg: it.id }));
+    }
+    rows.push(ui.button({ label: "Actualizar catálogo", action: "model:refresh" }));
+    return rows;
+  },
 });
 
 registerMenuPage("tools", {
@@ -85,6 +120,9 @@ registerMenuPage("tools", {
 registerMenuPage("view", {
   title: "Vista",
   build: (ui) => [
+    ui.section("Modelos 3D"),
+    ui.choice("modelMode", [["holo", "Holográfico"], ["solid", "Sólido"]]),
+    ui.section("Reactor"),
     ui.toggle("wire", "Wireframe"),
     ui.toggle("autoSpin", "Giro automático"),
     ui.button({ label: "Depuración", action: "view:hud", hint: "tecla H", selected: store.showHud }),
