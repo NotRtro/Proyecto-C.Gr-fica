@@ -1,11 +1,18 @@
-// Modelo 3D del catalogo (GLB / glTF de media/models), fase 6.
+// Modelo 3D del catalogo (GLB / glTF de media/models), fases 6 y 7.
 //
-//   - Se carga perezosamente con GLTFLoader; mientras tanto la tarjeta muestra
-//     "Cargando <nombre>...".
+//   - Se carga perezosamente con GLTFLoader (con Draco y Meshopt); mientras tanto
+//     la tarjeta muestra "Cargando <nombre>...".
 //   - Se centra y escala para que quepa (docs/04: "Centrado y escalado").
-//   - PIEZAS: cada nodo del glTF que tiene malla es una pieza (si un nodo tiene
-//     varias primitivas/materiales, se mueven juntas). El explode las separa con
-//     js/three/explodePlan.js.
+//   - PIEZAS (fase 7, js/three/pieceRig.js): ensambles de la jerarquia del glTF,
+//     agrupables con el manifest del modelo (media/models/<nombre>.json). El
+//     explode las separa; con el modelo desarmado la pieza bajo la mano se apunta
+//     con raycast, se resalta, se arrastra en el plano de la camara y, soltada
+//     cerca de su lugar original, encaja. Todas encajadas = modelo armado.
+//   - ARMADO GUIADO (7E): las piezas se encajan en orden (el del manifest o de la
+//     mas grande a la mas chica); la que toca brilla en ambar y su lugar se ve
+//     como silueta. Una pieza que no toca no encaja.
+//   - El modelo se agarra por su SILUETA: un punto transparente del cuadro no es
+//     el modelo (pick devuelve null).
 //   - Modo "solid" (materiales originales + luz de entorno, docs/04 "Modo solido")
 //     u "holo" (shader holografico, js/three/holoModelMaterial.js). Por defecto se
 //     ve original y solo es holografico si no trae apariencia propia; Menu > Vista
@@ -16,17 +23,37 @@
 // Cada modelo tiene su propio renderer WebGL (como el reactor). Limite: MODEL.MAX_IN_SCENE.
 import * as THREE from "three";
 import { registerItemType } from "./registry.js";
-import { HOLO, FOLLOW_LERP, MODEL } from "../core/config.js";
+import { HOLO, FOLLOW_LERP, MODEL, PIECES } from "../core/config.js";
 import { settings } from "../core/settings.js";
 import { emit } from "../core/bus.js";
 import { buildHoloModelMaterial } from "../three/holoModelMaterial.js";
-import { explodePlan, partFactor } from "../three/explodePlan.js";
 import { hasOwnLook } from "../three/modelLook.js";
+import { manifestPathFor, guideOrder, createGuide, guideExpected, guideCanSnap, guideAdvance } from "../three/pieces.js";
+import {
+  buildPieces, applyPieces, relaxPieces, placedCount, pickPiece, setHighlight, isDragged,
+  beginDrag, moveDrag, endDrag, cancelDrags, serializePieces, applyRemotePieces, setHint, resetPieces,
+} from "../three/pieceRig.js";
+
+// Decodificadores para GLB comprimidos (Draco y Meshopt, muy comunes al optimizar
+// modelos con gltf.report o gltf-transform). Se cargan del mismo CDN que three.js
+// y el WASM de Draco solo se descarga si un modelo lo necesita.
+const DRACO_PATH = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/";
 
 let loaderPromise = null;
 function gltfLoader() {
   if (!loaderPromise) {
-    loaderPromise = import("three/addons/loaders/GLTFLoader.js").then((m) => new m.GLTFLoader());
+    loaderPromise = Promise.all([
+      import("three/addons/loaders/GLTFLoader.js"),
+      import("three/addons/loaders/DRACOLoader.js"),
+      import("three/addons/libs/meshopt_decoder.module.js"),
+    ]).then(([g, d, m]) => {
+      const loader = new g.GLTFLoader();
+      const draco = new d.DRACOLoader();
+      draco.setDecoderPath(DRACO_PATH);
+      loader.setDRACOLoader(draco);
+      loader.setMeshoptDecoder(m.MeshoptDecoder);
+      return loader;
+    });
   }
   return loaderPromise;
 }
@@ -39,21 +66,21 @@ function roomEnvironment() {
   return roomEnvPromise;
 }
 
-// Piezas del modelo: el objeto de cada nodo glTF que tiene malla. GLTFLoader
-// registra en parser.associations que objeto vino de que nodo/malla.
-function findParts(obj, parser) {
-  const parts = [];
-  obj.traverse((n) => {
-    const a = parser && parser.associations ? parser.associations.get(n) : null;
-    if (a && a.nodes !== undefined && a.meshes !== undefined) parts.push(n);
-  });
-  if (parts.length) return parts;
-  obj.traverse((n) => { if (n.isMesh) parts.push(n); }); // respaldo
-  return parts;
+// Manifest opcional del modelo (nombres, grupos y orden de las piezas). Lo leen
+// igual el tracker y la render page, asi las piezas coinciden en OBS.
+async function loadManifest(src) {
+  try {
+    const res = await fetch("/media/" + manifestPathFor(src), { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data && typeof data === "object" ? data : null;
+  } catch (e) {
+    return null; // sin manifest o JSON invalido: piezas automaticas
+  }
 }
 
 async function loadInto(view, src) {
-  const loader = await gltfLoader();
+  const [loader, manifest] = await Promise.all([gltfLoader(), loadManifest(src)]);
   const gltf = await loader.loadAsync("/media/" + src);
   if (view.disposed) { disposeObject(gltf.scene); return; }
   const obj = gltf.scene;
@@ -67,19 +94,8 @@ async function loadInto(view, src) {
   obj.position.sub(center);
   obj.updateMatrixWorld(true);
 
-  // Plan de explode por pieza: offsets en el espacio del modelo, pasados al
-  // espacio local del padre de cada pieza (solo la parte 3x3 de su matriz).
-  const partObjs = findParts(obj, gltf.parser);
-  const infos = partObjs.map((p) => {
-    const b = new THREE.Box3().setFromObject(p);
-    return { center: b.getCenter(new THREE.Vector3()).toArray(), size: b.getSize(new THREE.Vector3()).length() };
-  });
-  const plan = explodePlan(infos, diag);
-  view.parts = partObjs.map((p, i) => {
-    const inv = new THREE.Matrix4().copy(p.parent.matrixWorld).invert();
-    const off = new THREE.Vector3(...plan[i].offset).applyMatrix3(new THREE.Matrix3().setFromMatrix4(inv));
-    return { node: p, home: p.position.clone(), off, lag: plan[i].lag };
-  });
+  const { skinned } = buildPieces(view, obj, gltf.parser, diag, manifest);
+  view.manifest = manifest;
 
   const k = MODEL.FIT / diag;
   view.group.scale.setScalar(k);
@@ -92,7 +108,7 @@ async function loadInto(view, src) {
   view.hasLook = hasOwnLook([...view.originals.values()].flat().map(describeMaterial));
   view.ready = true;
   view.status.remove();
-  view.stats = { parts: view.parts.length, triangles: countTriangles(obj) };
+  view.stats = { parts: view.parts.length, triangles: countTriangles(obj), skinned, manifest: !!manifest };
 }
 
 function countTriangles(obj) {
@@ -110,6 +126,99 @@ function describeMaterial(m) {
   return { textured, color: m.color ? [m.color.r, m.color.g, m.color.b] : [1, 1, 1] };
 }
 
+// ---- piezas: API para el adapter de la escena (js/stage/interaction.js) ------
+
+const explodeFrac = (item) => Math.min(1, item.explode / HOLO.EXPLODE_OUT);
+
+// Que hay del modelo bajo el punto (x, y) de pantalla: null si el punto cae en
+// una zona transparente del cuadro; { part } si toca el modelo (part = indice de
+// la pieza, -1 si toca una malla que no es pieza). Mientras carga, todo el cuadro
+// cuenta como modelo. El resultado se memoriza dentro del mismo frame (el mismo
+// punto se consulta varias veces: cursor, resaltado, pinch).
+function pickModel(item, x, y) {
+  const v = item.view;
+  if (!v.ready) return v.error ? null : { part: -1 };
+  const key = v.drawn + "|" + Math.round(x) + "|" + Math.round(y);
+  if (v.pickKey === key) return v.pickHit;
+  const i = pickPiece(v, x, y);
+  v.pickKey = key;
+  v.pickHit = i === null ? null : { part: i };
+  return v.pickHit;
+}
+
+// Las piezas se apuntan y se toman solo con el modelo desarmado (README, fase 7).
+export function piecesActive(item) {
+  return item.type === "model" && item.view.ready && item.view.parts.length >= 2
+    && explodeFrac(item) >= PIECES.PICK_MIN_EXPLODE;
+}
+
+// withIds: agrega los numeros de pieza automaticos (para escribir el manifest).
+export function pieceLabel(item, i, withIds = false) {
+  const p = item.view.parts[i];
+  if (!p) return "";
+  return withIds ? p.label + " · #" + p.ids.join(",") : p.label;
+}
+
+// La pieza i se puede tomar (no la tiene ya otra mano).
+function pieceFree(item, i) { return piecesActive(item) && i >= 0 && !isDragged(item.view, i); }
+
+function pieceBegin(item, i, hand, x, y) {
+  return beginDrag(item.view, i, hand, x, y, explodeFrac(item));
+}
+
+function pieceMove(item, hand, x, y) { moveDrag(item.view, hand, x, y); }
+
+// Suelta la pieza; si con eso quedan todas encajadas, el modelo se arma. En el
+// armado guiado solo encaja la pieza que toca (out.wrong: se solto otra cerca de
+// su lugar; out.expected: la que tocaba).
+function pieceEnd(item, hand) {
+  const v = item.view;
+  const res = endDrag(v, hand, (i) => guideCanSnap(item.guide, i));
+  if (!res) return null;
+  const out = { part: res.i, label: v.parts[res.i].label, snapped: res.snapped,
+    placed: placedCount(v), total: v.parts.length };
+  if (item.guide) {
+    if (res.snapped) guideAdvance(item.guide, res.i);
+    else if (res.near) { out.wrong = true; out.expected = pieceLabel(item, guideExpected(item.guide)); }
+  }
+  if (res.snapped && out.placed === out.total) {
+    if (item.guide) stopGuide(item, true);
+    item.explodeTarget = 0;
+    emit("model:assembled", { item });
+  } else if (item.guide && res.snapped) emitGuide(item);
+  return out;
+}
+
+// ---- armado guiado (7E) ------------------------------------------------------
+
+function emitGuide(item) {
+  const g = item.guide;
+  emit("guide:update", { item, step: g.step + 1, total: g.order.length, label: pieceLabel(item, guideExpected(g)) });
+}
+
+// Empieza un armado guiado desde cero: desarma el modelo y deja todas las piezas
+// sueltas. false si el modelo no se puede desarmar.
+export function startGuide(item) {
+  const v = item.view;
+  if (item.type !== "model" || !v.ready || v.parts.length < 2) return false;
+  resetPieces(v);
+  const fromManifest = !!(v.manifest && Array.isArray(v.manifest.pieces) && v.manifest.pieces.length);
+  item.guide = createGuide(guideOrder(v.parts.map((p) => p.lag), fromManifest));
+  item.explodeTarget = HOLO.EXPLODE_OUT;
+  emitGuide(item);
+  return true;
+}
+
+// done: se termino armando el modelo (false = se cancelo).
+export function stopGuide(item, done = false) {
+  if (!item.guide) return;
+  item.guide = null;
+  setHint(item.view, -1);
+  emit("guide:end", { item, done });
+}
+
+// ---- modo de color ----------------------------------------------------------
+
 // Preferencia "original" | "holo" -> modo de ESTE modelo: los que no traen
 // apariencia propia siempre se ven holograficos (js/three/modelLook.js).
 function modeFor(view, look) {
@@ -121,7 +230,7 @@ async function applyMode(view, mode) {
   if (!view.ready || view.mode === mode) return;
   view.mode = mode;
   const holo = mode !== "solid";
-  view.obj.traverse((n) => { if (n.isMesh) n.material = holo ? view.holoMat : view.originals.get(n); });
+  view.obj.traverse((n) => { if (n.isMesh && !n.userData.overlay) n.material = holo ? view.holoMat : view.originals.get(n); });
   view.renderer.toneMapping = holo ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
   view.renderer.toneMappingExposure = 0.82;
   view.lights.visible = !holo;
@@ -136,13 +245,6 @@ async function applyMode(view, mode) {
   view.scene.environment = holo ? null : view.envTexture || null;
 }
 
-function applyExplode(view, f) {
-  for (const p of view.parts) {
-    const t = partFactor(f, p.lag);
-    p.node.position.set(p.home.x + p.off.x * t, p.home.y + p.off.y * t, p.home.z + p.off.z * t);
-  }
-}
-
 // Resolucion adaptativa (docs/04, ensureModelRes): el canvas mide MODEL.PX en CSS y
 // el item se escala con CSS; si se agranda, se sube la resolucion del dibujo.
 function ensureResolution(view, scale, held) {
@@ -155,15 +257,16 @@ function ensureResolution(view, scale, held) {
   view.renderer.setSize(MODEL.PX, MODEL.PX, false);
 }
 
-function draw(view, ry, explode) {
+function draw(view, ry, explode, dt) {
   view.group.rotation.y = ry;
   if (view.ready) {
     const f = Math.min(1, explode / HOLO.EXPLODE_OUT);
-    applyExplode(view, f);
+    applyPieces(view, f, dt);
     view.camera.position.z = MODEL.CAM_DIST * (1 + MODEL.EXPLODE_ZOOM * f);
     view.holoMat.uniforms.uTime.value = Date.now() / 1000; // reloj: tracker y OBS sincronizados
   }
   view.renderer.render(view.scene, view.camera);
+  view.drawn++;
 }
 
 function disposeObject(obj) {
@@ -174,10 +277,18 @@ function disposeObject(obj) {
   });
 }
 
+const overlayMaterial = (color, opacity, additive) => new THREE.MeshBasicMaterial({
+  color, transparent: true, opacity, depthWrite: false,
+  blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+  polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+});
+
 registerItemType("model", {
   defaultPos: { x: 0.5, y: 0.45 },
   rotatable: true,
   explodable: true,
+  pick: pickModel,
+  pieceFree, pieceBegin, pieceMove, pieceEnd,
   build(def) {
     const el = document.createElement("div");
     el.className = "modelcard glb";
@@ -205,8 +316,11 @@ registerItemType("model", {
 
     const view = {
       el, canvas, status, renderer, scene, camera, group, lights,
-      holoMat: buildHoloModelMaterial(), originals: new Map(), parts: [],
-      ready: false, disposed: false, mode: null, resScale: 1, src: def.src,
+      holoMat: buildHoloModelMaterial(), originals: new Map(), parts: [], meshPiece: new Map(), drags: new Map(),
+      hlMat: overlayMaterial(PIECES.HIGHLIGHT, PIECES.HIGHLIGHT_ALPHA, true), hlMeshes: [], hl: -1,
+      ghostMat: overlayMaterial(PIECES.GHOST, PIECES.GHOST_ALPHA, false),
+      hintMat: overlayMaterial(PIECES.HINT, PIECES.HINT_ALPHA, true), hintMeshes: [], hint: -1,
+      ready: false, disposed: false, mode: null, resScale: 1, src: def.src, drawn: 0,
     };
     view.loading = loadInto(view, def.src).catch((e) => {
       console.error("[modelo] no se pudo cargar", def.src, e);
@@ -218,29 +332,56 @@ registerItemType("model", {
   },
   init(item, def) {
     item.src = def.src || "";
+    item.ry = MODEL.START_RY;
     item.explode = 0; item.explodeTarget = 0;
+    item.hoverPart = -1;
     item.view.loading.then(() => {
       if (item.view.ready) emit("model:loaded", { item, stats: item.view.stats });
       else if (item.view.error) emit("model:error", { item, error: item.view.error });
     });
   },
   update(item, dt) {
-    if (settings.autoSpin && !item.manipulated) item.ry += HOLO.SPIN * 0.5 * dt;
+    const v = item.view;
+    // giro automatico (Menu > Vista); se pausa con la palma de "alto" y mientras
+    // se arrastra una pieza
+    if (settings.autoSpin && !item.manipulated && !item.spinPaused && !v.drags.size) item.ry += HOLO.SPIN * 0.5 * dt;
     item.explode += (item.explodeTarget - item.explode) * (1 - Math.exp(-HOLO.EXPLODE_RATE * dt));
-    applyMode(item.view, modeFor(item.view, settings.modelLook));
-    ensureResolution(item.view, item.scale, item.grabbed);
-    draw(item.view, item.ry, item.explode);
+    if (v.ready && item.explodeTarget / HOLO.EXPLODE_OUT < PIECES.PICK_MIN_EXPLODE) {
+      // se armo con el gesto, Herramientas o un comando: termina cualquier armado a mano
+      cancelDrags(v);
+      relaxPieces(v, dt, item.explode < 0.01);
+      stopGuide(item);
+    }
+    if (v.ready) setHint(v, item.guide ? guideExpected(item.guide) : -1);
+    applyMode(v, modeFor(v, settings.modelLook));
+    ensureResolution(v, item.scale, item.grabbed);
+    const dragged = v.drags.size ? v.drags.values().next().value.i : -1;
+    setHighlight(v, dragged >= 0 ? dragged : piecesActive(item) ? item.hoverPart : -1);
+    draw(v, item.ry, item.explode, dt);
+  },
+  serialize(item) {
+    return item.view.ready ? { pieces: serializePieces(item.view) } : {};
   },
   sync(ri, def, env) {
     ri.ry += ((def.ry || 0) - ri.ry) * FOLLOW_LERP;
     ri.explode += ((def.explode || 0) - ri.explode) * FOLLOW_LERP;
+    if (ri.view.ready) applyRemotePieces(ri.view, def.pieces, FOLLOW_LERP);
     applyMode(ri.view, modeFor(ri.view, env.view.modelLook || "original"));
     ensureResolution(ri.view, ri.scale, false);
-    draw(ri.view, ri.ry, ri.explode);
+    const now = env.now / 1000;
+    const dt = ri.lastT ? Math.min(0.1, now - ri.lastT) : 0;
+    ri.lastT = now;
+    draw(ri.view, ri.ry, ri.explode, dt);
   },
   dispose(item) {
     const v = item.view;
     v.disposed = true;
+    if (v.ready) cancelDrags(v);
+    setHighlight(v, -1);
+    if (v.ready) setHint(v, -1);
+    v.hlMat.dispose();
+    v.hintMat.dispose();
+    v.ghostMat.dispose();
     if (v.obj) {
       v.obj.traverse((n) => { if (n.isMesh) n.material = v.originals.get(n) || n.material; });
       disposeObject(v.obj);

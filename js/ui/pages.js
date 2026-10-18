@@ -8,6 +8,7 @@ import { HOLO, MODEL } from "../core/config.js";
 import { findExplodable, spawnItem, findByType, findItem, removeItem, applyTransform } from "../items/registry.js";
 import { catalog, catalogLoaded, refreshCatalog } from "../net/catalog.js";
 import { addModel } from "../stage/models.js";
+import { startGuide, stopGuide } from "../items/model.js";
 import { cycleCamera } from "../input/camera.js";
 import { resetAll } from "../stage/scene.js";
 import { registerAction } from "./actions.js";
@@ -45,6 +46,16 @@ registerAction("model:refresh", () => { refreshCatalog().then(refreshMenu); });
 on("menu:open", () => { refreshCatalog().then(refreshMenu); });
 on("model:loaded", ({ item, stats }) => {
   toast((item.title || "Modelo") + " listo · " + stats.parts + " piezas · " + Math.round(stats.triangles / 1000) + " mil triángulos");
+  // Avisos para modelos que no se pueden desarmar (media/models/README.md).
+  if (stats.skinned) toast((item.title || "El modelo") + " tiene esqueleto (personaje): se puede mover, pero no desarmar", { kind: "error", ms: 7000 });
+  else if (stats.parts < 2) toast((item.title || "El modelo") + " es una sola pieza: se puede mover, pero no desarmar. Sepáralo en Blender (P › By Loose Parts)", { kind: "error", ms: 9000 });
+});
+// Fase 7D: encajar piezas y armar el modelo.
+on("piece:drop", ({ snapped, label, placed, total }) => {
+  if (snapped) toast("Encajada: " + label + " · " + placed + " de " + total, { ms: 1600 });
+});
+on("model:assembled", ({ item }) => {
+  toast("¡" + (item.title || "Modelo") + " armado!", { ms: 3500 });
 });
 on("model:error", ({ item }) => {
   toast("No se pudo cargar " + (item.title || item.src), { kind: "error" });
@@ -59,7 +70,17 @@ function withModel(fn) {
 registerAction("tools:explode", () => withModel((m) => { m.explodeTarget = HOLO.EXPLODE_OUT; }));
 registerAction("tools:assemble", () => withModel((m) => { m.explodeTarget = 0; }));
 registerAction("tools:center", () => withModel(centerItem));
+// Alternativa con mouse a la palma de "alto" (fase 7B).
+registerAction("tools:spin", () => withModel((m) => {
+  m.spinPaused = !m.spinPaused;
+  toast((m.spinPaused ? "Giro detenido · " : "Giro reanudado · ") + (m.title || "modelo"));
+}));
 registerAction("tools:reset", () => { resetAll(); closeMenu(); toast("Escena reiniciada"); });
+// Armado guiado (fase 7E): sobre el modelo activo.
+registerAction("tools:guide", () => withModel((m) => {
+  if (m.guide) { stopGuide(m); return; }
+  if (!startGuide(m)) toast((m.title || "Este modelo") + " no se puede armar por piezas", { kind: "error" });
+}));
 
 registerAction("view:hud", () => { emit("hud:toggle", {}); refreshMenu(); });
 registerAction("camera:cycle", () => { cycleCamera(); toast("Cambiando de cámara…"); });
@@ -111,7 +132,11 @@ registerMenuPage("tools", {
   build: (ui) => [
     ui.button({ label: "Desarmar", action: "tools:explode" }),
     ui.button({ label: "Armar", action: "tools:assemble" }),
+    ui.button({ label: findExplodable() && findExplodable().guide ? "Terminar armado guiado" : "Armado guiado",
+      action: "tools:guide", hint: "pieza por pieza, en orden" }),
     ui.button({ label: "Centrar modelo", action: "tools:center" }),
+    ui.button({ label: findExplodable() && findExplodable().spinPaused ? "Reanudar giro" : "Detener giro",
+      action: "tools:spin", hint: "o palma de \"alto\" quieta" }),
     ui.button({ label: "Reiniciar escena", action: "tools:reset", hold: HOLD_MS, danger: true,
       hint: "mantener · borra tarjetas e imágenes" }),
   ],
@@ -135,6 +160,9 @@ const GESTURES = [
   ["Tap", "pinch rápido: pulsar / expandir"],
   ["Dos manos", "separar = escalar · girar = rotar"],
   ["Pinch en vacío ↔", "derecha desarma · izquierda arma"],
+  ["Pinch sobre una pieza", "con el modelo desarmado: sacarla · cerca de su lugar encaja"],
+  ["Palma de \"alto\" quieta", "detiene o reanuda el giro del modelo"],
+  ["Palma con los dedos a la cámara", "girar la muñeca = girar el modelo"],
   ["Pinch rápido en el orbe", "abre o cierra este menú · mantener y mover = moverlo"],
   ["Pinch en vacío (rápido)", "cierra este menú"],
   ["Mouse", "arrastrar · rueda escala · Shift+rueda rota"],

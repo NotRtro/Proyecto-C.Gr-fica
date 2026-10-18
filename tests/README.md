@@ -20,7 +20,6 @@ Requiere Node 18+. No hay dependencias que instalar.
 | `two_hand.json` | dos manos: escala x2, giro 20 grados, y la mano restante sigue arrastrando |
 | `explode_drag.json` | pinch en vacio + arrastre horizontal = explode/assemble; vertical no hace nada |
 | `hand_swap.json` | MediaPipe alterna Left/Right y pierde la mano 100 ms: el objeto no se suelta |
-| `palm.json` | prueba negativa: mano abierta y quieta no dispara nada |
 | `menu_orb_click.json` | grab rapido sobre el orbe (con temblor) abre el menu |
 | `menu_orb_drag.json` | mantener y mover el orbe lo arrastra sin abrir el menu |
 | `menu_select.json` | elegir filas: el punto de intencion corrige el salto al juntar los dedos |
@@ -29,6 +28,10 @@ Requiere Node 18+. No hay dependencias que instalar.
 | `pinch_closed.json` | pinch con medio, anular y menique recogidos: agarra y arrastra igual que el pinch OK |
 | `pinch_mixed.json` | pinch OK que se cierra a mitad del arrastre: no se suelta |
 | `fist.json` | prueba negativa: un puno (incluso con el pulgar sobre la punta del indice) no es pinch |
+| `palm.json` | palma de "alto" quieta 1,6 s: detiene el giro una sola vez (ni pinch ni tap) |
+| `palm_stop.json` | palma de "alto": moviendose no dispara; quieta detiene; otra vez reanuda |
+| `palm_dial.json` | palma "perilla" (dedos a la camara, con profundidad z): girar la muneca 40 grados gira el modelo |
+| `palm_negative.json` | soltar un pinch abriendo la mano y un puno hacia la camara no son gestos de palma |
 
 Las de esta carpeta son **sinteticas** (`synthetic.mjs` arma las manos a partir
 de poses). Tambien se pueden ver en el navegador:

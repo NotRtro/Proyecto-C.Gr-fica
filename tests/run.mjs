@@ -18,6 +18,11 @@ import { setSetting } from "../js/core/settings.js";
 import { samplesFromRecording } from "./calibrate.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
+import {
+  findPieces, prettyName, screenToNdc, screenToNdcClamped, groupPieces, shouldSnap, manifestPathFor,
+  guideOrder, createGuide, guideExpected, guideCanSnap, guideAdvance,
+} from "../js/three/pieces.js";
+import { PIECES } from "../js/core/config.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VIEW = { w: 1280, h: 720 };
@@ -143,10 +148,38 @@ test("hand_swap: la etiqueta Left/Right alterna y la mano se pierde 100ms sin so
   near(s.byId("holo").x, 840, 10, "x final del reactor");
 });
 
-test("palm: la mano abierta y quieta no dispara nada (ni pinch ni tap)", () => {
+test("palm: la palma quieta detiene el giro UNA vez y no dispara pinch ni tap", () => {
   const s = makeScene();
   play(loadRec("palm"), s);
-  check(s.events.length === 0, "no deberia haber eventos, hubo: " + s.events.map((e) => e.e).join(","));
+  const other = s.events.filter((e) => !e.e.startsWith("palm:"));
+  check(other.length === 0, "no deberia haber otros eventos, hubo: " + other.map((e) => e.e).join(","));
+  check(s.count("palm:stop") === 1, "un solo palm:stop, hubo " + s.count("palm:stop"));
+  check(s.byId("holo").spinPaused === true, "el giro queda detenido");
+});
+
+test("palm_stop: moviendose no dispara; quieta detiene; otra vez reanuda", () => {
+  const s = makeScene();
+  play(loadRec("palm_stop"), s);
+  const stops = s.events.filter((e) => e.e === "palm:stop").map((e) => e.paused);
+  check(stops.join(",") === "true,false", "detener y reanudar, hubo: " + stops.join(","));
+  check(s.count("cursor:pinch-start") === 0, "ningun pinch");
+});
+
+test("palm_dial: dedos a la camara + girar la muneca 40 grados gira el modelo ~36 (zona muerta 4)", () => {
+  const s = makeScene();
+  play(loadRec("palm_dial"), s);
+  check(s.count("palm:dial-start") === 1 && s.count("palm:dial-end") === 1, "una sesion de perilla");
+  near(s.byId("holo").ry, 36 * DEG, 2 * DEG, "giro del modelo (rad)");
+  check(s.byId("holo").spinPaused === true, "girar a mano deja el modelo quieto");
+  check(s.count("cursor:pinch-start") === 0, "la perilla no es pinch");
+});
+
+test("palm_negative: soltar un pinch abriendo la mano y un puno hacia la camara no son palma", () => {
+  const s = makeScene();
+  play(loadRec("palm_negative"), s);
+  check(s.count("palm:stop") === 0 && s.count("palm:dial-start") === 0,
+    "ningun gesto de palma, hubo: " + s.events.filter((e) => e.e.startsWith("palm:")).map((e) => e.e).join(","));
+  check(s.count("cursor:pinch-start") === 1, "el pinch del principio si cuenta");
 });
 
 test("pinch_closed: pinch con medio, anular y menique recogidos agarra y arrastra", () => {
@@ -553,6 +586,170 @@ test("apariencia: con texturas o colores propios se ve original; sin nada, holog
   // colores reales del Buggy (sin texturas): rojo, gris y blanco
   check(hasOwnLook([mat([0.54, 0.25, 0.25]), mat([0.4, 0.4, 0.4]), mat([1, 1, 1])]), "Buggy -> original");
   check(hasOwnLook([mat([0.9, 0.9, 0.9]), mat([0.1, 0.1, 0.1])]), "blanco y negro -> original");
+});
+
+// ---- fase 7: piezas (js/three/pieces.js) ------------------------------------
+
+console.log("gemelo digital (fase 7):");
+
+// Arbol de prueba: N(mesh, ...hijos) con un nombre para identificar cada nodo.
+const N = (name, mesh, ...children) => ({ name, mesh, children });
+const names = (list) => list.map((n) => n.name).join(",");
+
+test("piezas: estilo Buggy = los hijos del primer nodo que se ramifica (ensambles enteros)", () => {
+  const rueda = N("rueda", false, N("llanta", true), N("rin", true), N("buje", true));
+  const root = N("scene", false, N("vacio", false), N("raiz", false, N("chasis", true), rueda, N("asiento", true), N("volante", true)));
+  check(names(findPieces(root)) === "chasis,rueda,asiento,volante", "piezas: " + names(findPieces(root)));
+});
+
+test("piezas: se bajan los envoltorios de un solo hijo", () => {
+  const root = N("scene", false, N("w1", false, N("w2", false, N("a", true), N("b", true), N("c", true), N("d", true))));
+  check(names(findPieces(root)) === "a,b,c,d", "piezas: " + names(findPieces(root)));
+});
+
+test("piezas: con pocas piezas se abre la mas grande (sin malla propia)", () => {
+  const carro = N("carroceria", false, N("puerta", true), N("capo", true), N("techo", true));
+  const root = N("scene", false, N("raiz", false, carro, N("rueda", true)));
+  check(names(findPieces(root)) === "puerta,capo,techo,rueda", "piezas: " + names(findPieces(root)));
+  // con malla propia no se abre: moverla moveria tambien a sus hijos
+  const base = N("base", true, N("tapa", true));
+  const root2 = N("scene", false, N("raiz", false, base, N("rueda", true)));
+  check(names(findPieces(root2)) === "base,rueda", "con malla propia: " + names(findPieces(root2)));
+});
+
+test("piezas: un modelo de una sola malla es una sola pieza (no se desarma)", () => {
+  check(names(findPieces(N("scene", false, N("escaneo", true)))) === "escaneo", "una pieza");
+  check(findPieces(N("scene", false, N("vacio", false))).length === 0, "sin mallas: ninguna");
+});
+
+test("piezas: nombres legibles y automaticos descartados", () => {
+  check(prettyName("Wheel_FL.001") === "Wheel FL", "Blender: " + prettyName("Wheel_FL.001"));
+  check(prettyName("rueda-delantera") === "rueda delantera", "guiones");
+  check(prettyName("") === null && prettyName(undefined) === null, "vacio");
+  check(prettyName("Node_12") === null && prettyName("mesh.004") === null && prettyName("Object") === null, "automaticos");
+});
+
+test("piezas: punto de pantalla -> coordenadas del canvas (-1..1, y arriba)", () => {
+  const r = { left: 100, top: 50, width: 400, height: 200 };
+  const c = screenToNdc(r, 300, 150);
+  near(c.x, 0, 1e-9, "centro x"); near(c.y, 0, 1e-9, "centro y");
+  const tl = screenToNdc(r, 100, 50);
+  near(tl.x, -1, 1e-9, "esquina x"); near(tl.y, 1, 1e-9, "esquina y (arriba = +1)");
+  check(screenToNdc(r, 99, 150) === null, "fuera del canvas");
+});
+
+test("piezas: punto fuera del cuadro se lleva al borde con margen (la pieza no se sale)", () => {
+  const r = { left: 0, top: 0, width: 200, height: 200 };
+  const c = screenToNdcClamped(r, 500, -50, 0.1);
+  near(c.x, 0.9, 1e-9, "x al borde derecho con margen"); near(c.y, 0.9, 1e-9, "y al borde de arriba con margen");
+});
+
+test("manifest: donde se busca y como agrupa piezas (con 'rest' y numeros invalidos)", () => {
+  check(manifestPathFor("models/Buggy.glb") === "models/Buggy.json", "archivo suelto");
+  check(manifestPathFor("models/bici/model.glb") === "models/bici/manifest.json", "carpeta");
+  const sinManifest = groupPieces(3, null);
+  check(sinManifest.length === 3 && sinManifest[2].members.join() === "2", "sin manifest: una pieza por pieza");
+  const g = groupPieces(6, { pieces: [
+    { label: "Chasis", parts: [1, 2] }, { label: "Rueda", parts: [3, 3, 99, "x"] }, { label: "Vacia", parts: [] },
+  ] });
+  check(g.map((x) => x.label || "-").join() === "Chasis,Rueda,-,-,-", "grupos + sueltas: " + g.map((x) => x.label).join());
+  check(g[1].members.join() === "2", "repetidos e invalidos ignorados: " + g[1].members.join());
+  const r = groupPieces(6, { pieces: [{ label: "Chasis", parts: [1] }, { label: "Rueda", parts: [2] }], rest: "Chasis" });
+  check(r.length === 2 && r[0].members.join() === "0,2,3,4,5", "rest se lleva las no nombradas: " + r[0].members.join());
+});
+
+test("iman: encaja cerca de su lugar (relativo al tamano del cuadro), no lejos", () => {
+  check(shouldSnap(PIECES.SNAP_FRAC * 560 - 1, 560), "justo adentro");
+  check(!shouldSnap(PIECES.SNAP_FRAC * 560 + 1, 560), "justo afuera");
+  check(shouldSnap(PIECES.SNAP_FRAC * 1120 - 1, 1120), "con el modelo agrandado el iman crece");
+});
+
+// Escena falsa con un modelo desarmado de 2 piezas en (500,300) y (700,300). Las
+// piezas se mueven con la mano; encajan si se sueltan a < 30 px de su lugar.
+function pieceScene() {
+  const s = makeScene();
+  const model = { id: "m", type: "model", x: 600, y: 300, w: 560, h: 560, scale: 1, ry: 0 };
+  s.items.push(model);
+  const pieces = [{ home: [500, 300] }, { home: [700, 300] }].map((p) => ({ ...p, pos: [...p.home], placed: false }));
+  const drags = new Map();
+  Object.assign(s.adapter, {
+    pieceAt(x, y) {
+      const i = pieces.findIndex((p, k) => Math.hypot(x - p.pos[0], y - p.pos[1]) < 25 && ![...drags.values()].some((d) => d.i === k));
+      return i >= 0 ? { item: model, part: i } : null;
+    },
+    beginPiece(item, i, hand, x, y) { drags.set(hand, { i, x0: x, y0: y, p0: [...pieces[i].pos] }); return true; },
+    movePiece(item, hand, x, y) {
+      const d = drags.get(hand);
+      pieces[d.i].pos = [d.p0[0] + x - d.x0, d.p0[1] + y - d.y0];
+    },
+    endPiece(item, hand) {
+      const d = drags.get(hand); drags.delete(hand);
+      const p = pieces[d.i];
+      const snapped = Math.hypot(p.pos[0] - p.home[0], p.pos[1] - p.home[1]) < 30;
+      if (snapped) { p.pos = [...p.home]; p.placed = true; }
+      return { snapped };
+    },
+  });
+  return { ...s, model, pieces };
+}
+
+test("piezas (7C/7D): pinch sobre una pieza la arrastra sin mover el modelo; soltarla cerca encaja", () => {
+  const s = pieceScene();
+  const pipe = createInputPipeline(s.adapter);
+  let t = 1000;
+  const step = (m) => pipe.step({ detections: null, video: null, now: (t += 16), view: VIEW, extra: [m] });
+  step(mouseState(500, 300, true, "start"));
+  check(pipe.arbiter.mode() === "PIECE", "modo PIECE, es " + pipe.arbiter.mode());
+  for (let i = 1; i <= 10; i++) step(mouseState(500 + i * 15, 300 - i * 10, true));
+  step(mouseState(650, 200, false, "end"));
+  near(s.pieces[0].pos[0], 650, 1e-9, "la pieza se movio con la mano (x)");
+  check(!s.pieces[0].placed, "lejos de su lugar no encaja");
+  check(s.model.x === 600 && s.count("grab:start") === 0, "el modelo no se movio");
+  check(s.count("cursor:tap") === 0, "tomar una pieza no es tap");
+  // la vuelve a tomar y la suelta cerca de su lugar
+  step(mouseState(650, 200, true, "start"));
+  for (let i = 1; i <= 10; i++) step(mouseState(650 - i * 14, 200 + i * 9.5, true));
+  step(mouseState(510, 295, false, "end"));
+  check(s.pieces[0].placed, "soltada cerca: encaja");
+  const drops = s.events.filter((e) => e.e === "piece:drop").map((e) => e.snapped);
+  check(drops.join() === "false,true", "eventos piece:drop: " + drops.join());
+});
+
+test("piezas: dos manos toman dos piezas distintas; la misma pieza no se toma dos veces", () => {
+  const s = pieceScene();
+  const pipe = createInputPipeline(s.adapter);
+  let t = 1000;
+  const hand = (id, x, y, pinched, change = null) => ({ ...mouseState(x, y, pinched, change), id, source: "hand" });
+  const step = (...hs) => pipe.step({ detections: null, video: null, now: (t += 16), view: VIEW, extra: hs });
+  step(hand("a", 500, 300, true, "start"), hand("b", 700, 300, true, "start"));
+  check(pipe.arbiter.roleOf("a") === "piece" && pipe.arbiter.roleOf("b") === "piece", "las dos manos con pieza");
+  step(hand("a", 520, 300, false, "end"), hand("b", 700, 300, false, "end"));
+  check(s.pieces[0].placed && s.pieces[0].pos[0] === 500, "soltada a 20 px de su lugar: encajo");
+  step(hand("c", 510, 300, true, "start"));
+  step(hand("c", 550, 300, true));
+  check(s.pieces[0].pos[0] === 540, "otra mano retoma la pieza encajada y la mueve +40: " + s.pieces[0].pos[0]);
+});
+
+test("armado guiado: orden (manifest o por tamano), solo encaja la que toca, termina al final", () => {
+  const lags = [0.3, 0, 0.5, 0.1];
+  check(guideOrder(lags, true).join() === "0,1,2,3", "con manifest: su orden");
+  check(guideOrder(lags, false).join() === "1,3,0,2", "sin manifest: de la mas grande a la mas chica");
+  const g = createGuide([2, 0, 1]);
+  check(guideCanSnap(null, 1), "sin armado guiado cualquiera encaja");
+  check(guideExpected(g) === 2 && !guideCanSnap(g, 0) && guideCanSnap(g, 2), "toca la 2");
+  check(!guideAdvance(g, 0) && guideExpected(g) === 2, "encajar otra no avanza");
+  check(!guideAdvance(g, 2) && guideExpected(g) === 0, "avanza a la 0");
+  guideAdvance(g, 0);
+  check(guideAdvance(g, 1) && guideExpected(g) === -1, "la ultima termina el armado");
+});
+
+test("manifest del Buggy (media/models/Buggy.json): 16 piezas con nombre y el resto al chasis", () => {
+  const manifest = JSON.parse(readFileSync(join(HERE, "..", "media", "models", "Buggy.json"), "utf8"));
+  const g = groupPieces(129, manifest); // el Buggy tiene 129 piezas automaticas
+  check(g.length === 16 && g.every((x) => x.label), "16 grupos con nombre, hubo " + g.length);
+  check(g.reduce((n, x) => n + x.members.length, 0) === 129, "ninguna pieza se pierde ni se repite");
+  check(g[0].label === "Chasis" && g[0].members.length > 50, "el chasis se lleva las piezas chicas");
+  check(g.filter((x) => /^Rueda/.test(x.label)).length === 6, "6 ruedas");
 });
 
 console.log("\n" + passed + " ok, " + failed + " fallas");

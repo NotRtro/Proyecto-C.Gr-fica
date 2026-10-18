@@ -5,6 +5,8 @@
 // Roles por mano:
 //   idle             sin pinch
 //   grab             arrastra un item (offset preservado, sin salto al centro)
+//   piece            arrastra una PIEZA de un modelo desarmado (fase 7C); al soltarla
+//                    puede encajar en su lugar (7D)
 //   two-hand         junto con otra mano escala/rota/mueve un item
 //   explode-pending  pinch en vacio: todavia no se sabe si es un arrastre horizontal
 //   explode          pinch en vacio + arrastre horizontal = explode/assemble
@@ -12,17 +14,25 @@
 //   ui               pinch sobre la interfaz (menu): no toca la escena
 //   locked           el arbitro esta bloqueado (menu abierto)
 //
+// Gestos de palma (fase 7B, mano SIN pinch; ver js/input/recognizers/palm.js):
+//   palma de "alto" quieta  -> item.spinPaused se invierte (detener / reanudar giro)
+//   palma "perilla"         -> gira el modelo (item.ry) con el angulo de la muneca
+// Actuan sobre el modelo bajo la palma o, si no hay, el modelo activo.
+//
 // adapter = {
 //   hitTest(x, y) -> item | null     findItem(id) -> item | null
 //   findExplodable() -> item | null  canRotate(item) -> bool
 //   onMoved(item)   onGrab(item, on)   onTap(item)   emit(evento, payload)
 //   isUiAt(x, y) -> bool   (opcional: hay interfaz encima de la escena en ese punto)
+//   pieceAt(x, y) -> { item, part } | null      (opcional, fase 7: pieza que se puede tomar)
+//   beginPiece(item, part, hand, x, y) -> bool  movePiece(item, hand, x, y)
+//   endPiece(item, hand) -> { snapped, ... } | null
 // }
 // Los items son objetos con x, y (px), scale, ry y, si explotan, explodeTarget.
 import { dist } from "../core/util.js";
-import { TAP, TWO_HAND, EXPLODE_DRAG, FOLLOW_LERP, HOLO, MOUSE } from "../core/config.js";
+import { TAP, TWO_HAND, EXPLODE_DRAG, FOLLOW_LERP, HOLO, MOUSE, PALM } from "../core/config.js";
 
-export const MODES = { IDLE: "IDLE", GRAB: "GRAB", TWO_HAND: "TWO_HAND", EXPLODE: "EXPLODE", LOCKED: "LOCKED" };
+export const MODES = { IDLE: "IDLE", GRAB: "GRAB", PIECE: "PIECE", TWO_HAND: "TWO_HAND", EXPLODE: "EXPLODE", DIAL: "DIAL", LOCKED: "LOCKED" };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -65,6 +75,22 @@ export function createArbiter(adapter) {
       else held.delete(r.itemId);
     }
     r.role = "idle"; r.itemId = null;
+  }
+
+  // ---- piezas (fase 7) ----------------------------------------------------
+
+  function startPiece(r, h, piece) {
+    if (!adapter.beginPiece(piece.item, piece.part, h.id, h.ax, h.ay)) return false;
+    r.role = "piece"; r.itemId = piece.item.id; r.part = piece.part;
+    adapter.emit("piece:grab", { hand: h.id, item: piece.item, part: piece.part });
+    return true;
+  }
+
+  function endPiece(r) {
+    const item = adapter.findItem(r.itemId);
+    const res = item ? adapter.endPiece(item, r.id) : null;
+    if (item) adapter.emit("piece:drop", { hand: r.id, item, part: r.part, ...(res || {}) });
+    r.role = "idle"; r.itemId = null; r.part = null;
   }
 
   // ---- dos manos ----------------------------------------------------------
@@ -131,6 +157,10 @@ export function createArbiter(adapter) {
     if (locked) { r.role = "locked"; return; }
     if (adapter.isUiAt && adapter.isUiAt(h.ax, h.ay)) { r.role = "ui"; return; }
 
+    // Con un modelo desarmado, el pinch sobre una pieza la toma (fase 7C).
+    const piece = adapter.pieceAt ? adapter.pieceAt(h.ax, h.ay) : null;
+    if (piece && startPiece(r, h, piece)) return;
+
     const item = adapter.hitTest(h.ax, h.ay);
     const holder = [...hands.values()].find((o) => o !== r && o.role === "grab");
     if (holder && !session) {
@@ -145,7 +175,11 @@ export function createArbiter(adapter) {
   }
 
   function onPinchHold(h, r) {
-    if (r.role === "grab") {
+    if (r.role === "piece") {
+      const item = adapter.findItem(r.itemId);
+      if (!item) { r.role = "none"; r.itemId = null; return; }
+      adapter.movePiece(item, h.id, h.ax, h.ay);
+    } else if (r.role === "grab") {
       const item = adapter.findItem(r.itemId);
       if (!item) { release(r); return; }
       const tx = h.ax + r.offset.x, ty = h.ay + r.offset.y;
@@ -178,7 +212,7 @@ export function createArbiter(adapter) {
   function onPinchEnd(h, r, now, allowTap) {
     const quick = now - r.pinchT < TAP.MAX_MS;
     const still = dist(r.start, { x: h.ax, y: h.ay }) < TAP.MAX_PX;
-    const tappable = r.role !== "two-hand" && r.role !== "explode";
+    const tappable = r.role !== "two-hand" && r.role !== "explode" && r.role !== "piece";
     if (allowTap && tappable && quick && still) {
       const item = locked || r.role === "ui" ? null : adapter.hitTest(r.start.x, r.start.y);
       if (item) adapter.onTap(item);
@@ -186,9 +220,49 @@ export function createArbiter(adapter) {
     }
     if (session && (session.a === r.id || session.b === r.id)) endSession(r.id);
     else if (r.role === "explode") { r.role = "idle"; r.itemId = null; }
+    else if (r.role === "piece") endPiece(r);
     else release(r);
     r.role = "idle";
     adapter.emit("cursor:pinch-end", { hand: h.id, x: h.ax, y: h.ay, removed: !!h.removed });
+  }
+
+  // ---- palma (fase 7B) ----------------------------------------------------
+
+  function palmTarget(p) {
+    const it = adapter.hitTest(p.x, p.y);
+    return it && adapter.canRotate(it) ? it : adapter.findExplodable();
+  }
+
+  function endDial(r) {
+    const item = r.dial && adapter.findItem(r.dial.itemId);
+    r.dial = null;
+    if (item) adapter.emit("palm:dial-end", { hand: r.id, item });
+  }
+
+  function onPalm(h, r) {
+    const p = h.palm;
+    if (!p || locked || h.pinched || r.role !== "idle") { if (r.dial) endDial(r); return; }
+    if (p.fired) {
+      const item = palmTarget(p);
+      if (item) {
+        item.spinPaused = !item.spinPaused;
+        adapter.emit("palm:stop", { hand: h.id, item, paused: item.spinPaused });
+      }
+    }
+    if (p.pose !== "dial") { if (r.dial) endDial(r); return; }
+    if (!r.dial) {
+      const item = palmTarget(p);
+      if (!item || !adapter.canRotate(item)) return;
+      // girar a mano deja el modelo quieto (la palma de "alto" lo vuelve a soltar)
+      item.spinPaused = true;
+      r.dial = { itemId: item.id, angle0: p.angle, ry0: item.ry || 0 };
+      adapter.emit("palm:dial-start", { hand: h.id, item });
+    }
+    const item = adapter.findItem(r.dial.itemId);
+    if (!item) { r.dial = null; return; }
+    const d = deadzone(wrapAngle(p.angle - r.dial.angle0), PALM.DIAL_DEADZONE);
+    item.ry = r.dial.ry0 + d * PALM.DIAL_GAIN;
+    adapter.onMoved(item);
   }
 
   // ---- API ----------------------------------------------------------------
@@ -201,6 +275,8 @@ export function createArbiter(adapter) {
       if (h.pinchChanged === "start") onPinchStart(h, r, now);
       if (h.pinched && h.present && h.pinchChanged !== "end") onPinchHold(h, r);
       if (h.pinchChanged === "end") onPinchEnd(h, r, now, !h.removed);
+      if (h.present && !h.removed) onPalm(h, r);
+      else if (r.dial) endDial(r);
       if (h.removed) hands.delete(h.id);
     }
     if (session) updateSession();
@@ -222,6 +298,7 @@ export function createArbiter(adapter) {
     if (session) endSession(null);
     for (const r of hands.values()) {
       if (r.role === "grab") release(r);
+      if (r.role === "piece") endPiece(r);
       if (r.role !== "idle") r.role = locked ? "locked" : "none";
       r.itemId = null;
     }
@@ -243,7 +320,9 @@ export function createArbiter(adapter) {
     if (session) return MODES.TWO_HAND;
     const roles = [...hands.values()].map((r) => r.role);
     if (roles.includes("explode")) return MODES.EXPLODE;
+    if (roles.includes("piece")) return MODES.PIECE;
     if (roles.includes("grab")) return MODES.GRAB;
+    if ([...hands.values()].some((r) => r.dial)) return MODES.DIAL;
     return MODES.IDLE;
   }
 

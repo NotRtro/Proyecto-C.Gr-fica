@@ -16,17 +16,45 @@ function uiElementAt(x, y) {
   return top ? top.closest("[data-ui]") : null;
 }
 
-function itemAt(x, y) {
+// Item bajo el punto y, si el tipo lo sabe (modelos 3D), la pieza: { item, part }.
+// Los tipos con pick() se tocan por su silueta: si el punto cae en una zona
+// transparente se sigue buscando lo que hay detras.
+function pickAt(x, y) {
+  const tried = new Set();
   for (const el of document.elementsFromPoint(x, y)) {
     if (el.closest("[data-ui]")) return null; // la interfaz esta encima
     const item = store.items.find((it) => isGrabbable(it) && (it.el === el || it.el.contains(el)));
-    if (item) return item;
+    if (!item || tried.has(item)) continue;
+    tried.add(item);
+    const T = getItemType(item.type);
+    if (!T.pick) return { item, part: -1 };
+    const hit = T.pick(item, x, y);
+    if (hit) return { item, part: hit.part };
   }
   return null;
 }
 
+function itemAt(x, y) {
+  const hit = pickAt(x, y);
+  return hit ? hit.item : null;
+}
+
+// Pieza de un modelo desarmado que se puede tomar en (x, y) (fase 7C).
+function pieceAt(x, y) {
+  const hit = pickAt(x, y);
+  if (!hit || hit.part < 0) return null;
+  const T = getItemType(hit.item.type);
+  return T.pieceFree && T.pieceFree(hit.item, hit.part) ? hit : null;
+}
+
+const typeOf = (item) => getItemType(item.type);
+
 const adapter = {
   hitTest: itemAt,
+  pieceAt,
+  beginPiece: (item, part, hand, x, y) => typeOf(item).pieceBegin(item, part, hand, x, y),
+  movePiece: (item, hand, x, y) => typeOf(item).pieceMove(item, hand, x, y),
+  endPiece: (item, hand) => typeOf(item).pieceEnd(item, hand),
   isUiAt: (x, y) => !!uiElementAt(x, y),
   findItem,
   findExplodable,
@@ -45,6 +73,8 @@ const adapter = {
 
 export const input = createInputPipeline(adapter);
 
+export { pickAt };
+
 // Que hay bajo un punto, para el estado visual del cursor: "ui" | "item" | null.
 export function hoverKindAt(x, y) {
   if (uiElementAt(x, y)) return "ui";
@@ -54,3 +84,4 @@ export function hoverKindAt(x, y) {
 // El ultimo modelo agarrado pasa a ser el "activo" (Herramientas, explode).
 on("grab:start", ({ item }) => { if (item) store.activeId = item.id; });
 on("twohand:start", ({ item }) => { if (item) store.activeId = item.id; });
+on("piece:grab", ({ item }) => { if (item) store.activeId = item.id; });

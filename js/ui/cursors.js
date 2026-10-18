@@ -4,7 +4,8 @@
 //   hover-ui   apuntando a un boton de la interfaz
 //   pinched    pinch confirmado: relleno
 //   lost       la mano se perdio un instante: atenuado
-//   progress   gesto de "mantener" en curso (levantar el orbe, Salir): anillo que se llena
+//   progress   gesto de "mantener" en curso (levantar el orbe, Salir, palma de "alto"): anillo que se llena
+//   dial       palma "perilla": girando el modelo con la muneca
 // El mouse no se dibuja: ya tiene el puntero del sistema.
 const els = new Map();
 
@@ -33,6 +34,7 @@ export function renderCursors(states, opts) {
     el.classList.toggle("hover-item", kind === "item");
     el.classList.toggle("hover-ui", kind === "ui");
     el.classList.toggle("progress", p > 0.02);
+    el.classList.toggle("dial", !!(h.palm && h.palm.pose === "dial"));
     el.style.setProperty("--p", p.toFixed(3));
   }
   for (const [id, el] of els) {

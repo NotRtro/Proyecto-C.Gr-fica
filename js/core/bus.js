@@ -12,6 +12,13 @@
 //   twohand:start       { item }
 //   twohand:end         { item }
 //   explode:start       { item }
+//   piece:grab          { hand, item, part }     (fase 7C: se tomo una pieza de un modelo desarmado)
+//   piece:drop          { hand, item, part, label, snapped, placed, total }   (7D: snapped = encajo)
+//   model:assembled     { item }                 (todas las piezas encajadas: el modelo se arma)
+//   palm:stop           { hand, item, paused }   (palma de "alto": se detuvo / reanudo el giro)
+//   palm:dial-start     { hand, item }           (palma "perilla": empieza a girar el modelo)
+//   palm:dial-end       { hand, item }
+//   model:loaded        { item, stats }   model:error { item, error }
 //   arbiter:locked      { locked }
 //   menu:open           { page }
 //   menu:close          {}

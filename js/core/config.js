@@ -89,10 +89,43 @@ export const MODEL = {
   PX: 560,            // lado del canvas de cada modelo (px CSS a escala 1)
   FIT: 1.3,           // diagonal del modelo en unidades de escena (armado ocupa ~2/3 del cuadro)
   CAM_DIST: 3.2,      // distancia de la camara (fov 35) con el modelo armado
+  START_RY: -0.6,     // giro inicial (vista 3/4): de frente, el desarmado de un modelo largo va hacia la camara y se tapa
   EXPLODE_ZOOM: 0.5,  // al desarmarlo del todo la camara se aleja un 50%: las piezas no se salen del cuadro
   MAX_IN_SCENE: 3,    // cada modelo usa un contexto WebGL propio: el navegador admite pocos
   RES_MAX: 2048,      // resolucion maxima del canvas al agrandar el modelo
   RES_HYSTERESIS: 0.25, // solo se re-dimensiona si la escala cambio mas que esto (y no esta agarrado)
+};
+
+// Gestos de palma (fase 7, paso 7B, js/input/recognizers/palm.js). Cortes de
+// partida con manos sinteticas: recalibrar con grabaciones reales (tecla G).
+export const PALM = {
+  STOP_EXT_ENTER: 1.55, STOP_EXT_HOLD: 1.4, // los 4 dedos estirados en la imagen (dedo doblado ~1.0)
+  STOP_TILT_ENTER: 35 * Math.PI / 180, STOP_TILT_HOLD: 45 * Math.PI / 180, // mano vertical
+  STOP_MS: 600,         // quieta este tiempo = detener / reanudar el giro
+  STILL_SPAN: 0.25,     // "quieta": el centro de la palma se mueve menos que esto x tamano de la mano
+  DIAL_DEPTH_ENTER: 1.0, DIAL_DEPTH_HOLD: 0.75, // puntas mas cerca de la camara que la muneca (anchos de palma)
+  DIAL_EXT3: 1.4,       // dedos estirados en 3D (un puno ~0.9)
+  DIAL_GAIN: 1.0,       // radianes del modelo por radian de giro de la muneca
+  DIAL_DEADZONE: 4 * Math.PI / 180,
+  CONFIRM_FRAMES: 3,    // frames de camara seguidos para cambiar de pose
+  AFTER_PINCH_MS: 500,  // tras soltar un pinch la mano se abre: no cuenta como palma un rato
+  SHOW_FROM: 0.25,      // el anillo de la palma de "alto" aparece desde este progreso (una mano de paso no muestra nada)
+};
+
+// Piezas de un modelo (fase 7, js/three/pieces.js y js/items/model.js).
+export const PIECES = {
+  MIN_COUNT: 4,          // con menos piezas se abre la mas grande en sus hijos
+  PICK_MIN_EXPLODE: 0.3, // las piezas se apuntan/toman con el modelo desarmado al menos este tanto (0..1)
+  SNAP_FRAC: 0.07,       // iman: se encaja si se suelta a menos de 7% del ancho del cuadro de su lugar
+  SNAP_MS: 260,          // animacion de encaje
+  DRAG_EDGE: 0.06,       // una pieza arrastrada no pasa de este margen del borde del cuadro (-1..1)
+  GHOST: 0x5fe3ff,       // silueta del lugar original mientras se arrastra una pieza
+  GHOST_ALPHA: 0.22,
+  HINT: 0xffc04d,        // armado guiado: la pieza que toca brilla en ambar
+  HINT_ALPHA: 0.5,
+  RELAX_RATE: 5.0,       // al armar, las piezas sacadas vuelven con este suavizado (como HOLO.EXPLODE_RATE)
+  HIGHLIGHT: 0x5fe3ff,   // color del resaltado de la pieza apuntada
+  HIGHLIGHT_ALPHA: 0.6,  // se suma (aditivo): la pieza "brilla" sobre cualquier color
 };
 
 // Apariencia propia de un modelo (js/three/modelLook.js): sin ella se ve holografico.

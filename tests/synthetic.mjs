@@ -3,7 +3,8 @@
 // de prueba deterministas. Las grabaciones reales (tecla G) usan el mismo formato.
 //
 // Las poses estan en unidades de "span" (muneca -> nudillo del medio), en
-// coordenadas de pantalla (y hacia abajo), relativas a la muneca.
+// coordenadas de pantalla (y hacia abajo), relativas a la muneca. Un tercer valor
+// opcional es la profundidad z (negativa = mas cerca de la camara), como MediaPipe.
 export const VIDEO = { w: 1280, h: 720 };
 export const FRAME_MS = 33; // ~30 fps, como una webcam
 const SPAN_PX = 110;
@@ -38,21 +39,41 @@ const POSES = {
   fist: { 4: [-0.12, -1.05], 6: [-0.27, -1.2], 7: [-0.2, -0.95], 8: [-0.18, -0.78], ...CURLED },
   // puno con la punta del pulgar sobre la del indice: solo el corte de f8 lo rechaza
   fist_tight: { 4: [-0.2, -0.85], 6: [-0.27, -1.2], 7: [-0.2, -0.95], 8: [-0.18, -0.78], ...CURLED },
+  // palma "perilla": dedos estirados apuntando a la camara (se ven cortos en la
+  // imagen, pero las puntas estan ~1.8 span mas cerca que la muneca)
+  dial: {
+    1: [-0.35, -0.15, -0.2], 2: [-0.55, -0.3, -0.45], 3: [-0.65, -0.4, -0.7], 4: [-0.72, -0.45, -0.95],
+    5: [-0.38, -0.45, -0.85], 6: [-0.4, -0.5, -1.3], 7: [-0.41, -0.52, -1.6], 8: [-0.42, -0.53, -1.85],
+    9: [-0.12, -0.5, -0.88], 10: [-0.12, -0.55, -1.35], 11: [-0.12, -0.57, -1.7], 12: [-0.12, -0.58, -1.95],
+    13: [0.12, -0.48, -0.85], 14: [0.13, -0.52, -1.3], 15: [0.13, -0.54, -1.6], 16: [0.13, -0.55, -1.85],
+    17: [0.35, -0.42, -0.75], 18: [0.36, -0.45, -1.15], 19: [0.36, -0.47, -1.4], 20: [0.36, -0.48, -1.6],
+  },
+  // puno con los nudillos hacia la camara: las puntas estan algo mas cerca que la
+  // muneca, pero los dedos no estan estirados (no es "perilla")
+  fist_forward: {
+    4: [-0.12, -1.05, -0.5], 5: [-0.25, -1.0, -0.7], 6: [-0.27, -1.2, -0.75], 7: [-0.2, -0.95, -0.7], 8: [-0.18, -0.78, -0.6],
+    9: [0, -1.0, -0.7], 13: [0.25, -1.0, -0.65], 17: [0.5, -0.9, -0.55],
+    ...Object.fromEntries(Object.entries(CURLED).map(([k, [x, y]]) => [k, [x, y, -0.6]])),
+  },
 };
 
 // Punto de pinch de la pose "pinch" (medio entre 4 y 8) respecto de la muneca.
 const PINCH_POINT = [(-0.35 - 0.3) / 2, (-1.05 - 1.1) / 2];
 
-// Mano cuya pose de pinch caeria en (px, py) de pantalla.
-export function hand(pose, px, py, label = "Right") {
+// Mano cuya pose de pinch caeria en (px, py) de pantalla. roll (grados, horario
+// en pantalla) gira la mano entera alrededor de la muneca, como girar la muneca.
+export function hand(pose, px, py, label = "Right", { roll = 0 } = {}) {
   const pts = { ...BASE, ...POSES[pose] };
   const wx = px - PINCH_POINT[0] * SPAN_PX, wy = py - PINCH_POINT[1] * SPAN_PX;
+  const c = Math.cos(roll * Math.PI / 180), s = Math.sin(roll * Math.PI / 180);
   const lm = [];
   for (let i = 0; i < 21; i++) {
-    const [ux, uy] = pts[i] || [0, -0.5];
+    const [ux0, uy0, uz = 0] = pts[i] || [0, -0.5];
+    const ux = ux0 * c - uy0 * s, uy = ux0 * s + uy0 * c;
     const sx = wx + ux * SPAN_PX, sy = wy + uy * SPAN_PX;
-    // pantalla -> landmark normalizado (deshace el espejo de toScreen)
-    lm.push([+(1 - sx / VIDEO.w).toFixed(5), +(sy / VIDEO.h).toFixed(5), 0]);
+    // pantalla -> landmark normalizado (deshace el espejo de toScreen); z en
+    // unidades del ancho de la imagen, como MediaPipe
+    lm.push([+(1 - sx / VIDEO.w).toFixed(5), +(sy / VIDEO.h).toFixed(5), +(uz * SPAN_PX / VIDEO.w).toFixed(5)]);
   }
   return { label, lm };
 }
@@ -148,9 +169,10 @@ export function scenarios() {
     out.hand_swap = tl.build();
   }
 
-  // 6. Prueba negativa: mano abierta y quieta (palma a la camara) = ningun evento.
+  // 6. Palma de "alto" quieta 1.6 s: detiene el giro UNA vez (y ni pinch ni tap).
+  //    Luego se relaja y vuelve 0.6 s: no alcanza para otro disparo.
   {
-    const tl = createTimeline("palma abierta quieta y mano relajada: no debe dispararse nada");
+    const tl = createTimeline("palma de alto quieta: detiene el giro una vez; ningun pinch ni tap");
     tl.repeat(48, () => [hand("palm", 900, 400)]);
     tl.repeat(6, () => [hand("open", 900, 400)]);
     tl.repeat(18, () => [hand("palm", 900, 400)]);
@@ -269,6 +291,45 @@ export function scenarios() {
     tl.repeat(30, (i, n) => [hand("fist_tight", lerp(800, 500, i / (n - 1)), 300)]);
     tl.repeat(8, () => [hand("open", 500, 300)]);
     out.fist = tl.build();
+  }
+
+  // 15. Palma de "alto" (fase 7B): moviendose no dispara; quieta 1 s detiene el
+  //     giro; se baja la mano y otra vez quieta 1 s lo reanuda.
+  {
+    const rand = seededJitter(15, 4);
+    const tl = createTimeline("palma de alto: moviendose nada; quieta detiene; otra vez reanuda");
+    tl.repeat(30, (i, n) => [hand("palm", lerp(500, 800, i / (n - 1)), 300)]);
+    tl.repeat(8, () => [hand("open", 800, 300)]);
+    tl.repeat(30, () => [hand("palm", 700 + rand(), 300 + rand())]);
+    tl.repeat(8, () => [hand("open", 700, 300)]);
+    tl.repeat(30, () => [hand("palm", 700 + rand(), 300 + rand())]);
+    tl.repeat(8, () => [hand("open", 700, 300)]);
+    out.palm_stop = tl.build();
+  }
+
+  // 16. Palma "perilla": dedos hacia la camara y girar la muneca +40 grados
+  //     (horario) gira el modelo; ningun pinch.
+  {
+    const rand = seededJitter(16, 3);
+    const tl = createTimeline("palma perilla: girar la muneca 40 grados gira el modelo");
+    tl.repeat(8, () => [hand("open", 640, 330)]);
+    tl.repeat(10, () => [hand("dial", 640 + rand(), 330 + rand())]);
+    tl.repeat(30, (i, n) => [hand("dial", 640 + rand(), 330 + rand(), "Right", { roll: lerp(0, 40, i / (n - 1)) })]);
+    tl.repeat(10, () => [hand("dial", 640 + rand(), 330 + rand(), "Right", { roll: 40 })]);
+    tl.repeat(10, () => [hand("open", 640, 330)]);
+    out.palm_dial = tl.build();
+  }
+
+  // 17. Pruebas negativas de palma: soltar un pinch abriendo la mano 0.8 s y un
+  //     puno con los nudillos hacia la camara no son gestos de palma.
+  {
+    const tl = createTimeline("soltar un pinch abriendo la mano y puno hacia la camara: ninguna palma");
+    tl.repeat(8, () => [hand("open", 300, 600)]);
+    tl.repeat(15, () => [hand("pinch", 300, 600)]);
+    tl.repeat(24, () => [hand("palm", 300, 600)]);
+    tl.repeat(8, () => [hand("open", 300, 600)]);
+    tl.repeat(40, () => [hand("fist_forward", 640, 330)]);
+    out.palm_negative = tl.build();
   }
 
   return out;

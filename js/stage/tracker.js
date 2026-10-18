@@ -10,7 +10,7 @@ import { Q } from "../core/env.js";
 import { store } from "../core/store.js";
 import { on } from "../core/bus.js";
 import { settings } from "../core/settings.js";
-import { PUSH_HZ } from "../core/config.js";
+import { PUSH_HZ, PALM } from "../core/config.js";
 import { getItemType, removeItem } from "../items/registry.js";
 import { openCamera, cycleCamera, videoEl } from "../input/camera.js";
 import { currentView } from "../input/coords.js";
@@ -29,6 +29,8 @@ import { applyCmds } from "../commands.js";
 import { spawnStage, resetAll } from "./scene.js";
 import { refreshCatalog } from "../net/catalog.js";
 import { input, hoverKindAt } from "./interaction.js";
+import { updatePartHover } from "../ui/partHover.js";
+import "../ui/guide.js";
 
 const MEDIAPIPE_VERSION = "0.10.14";
 const HAND_MODEL_URL =
@@ -69,6 +71,10 @@ function updateHud() {
       + ": pinch=" + h.pinched + " rol=" + role
       + " ratio=" + f2(m.ratio) + " arch=" + f2(m.arch) + " back=" + f2(m.backMean)
       + " indice=" + f2(m.f8) + " forma=" + (m.kind || "-"));
+    const pm = m.palm || {};
+    lines.push("    palma=" + ((h.palm && h.palm.pose) || "-") + " dedos2D=" + f2(pm.ext2) + " dedos3D=" + f2(pm.ext3)
+      + " prof=" + f2(pm.depth) + " incl=" + Math.round((pm.tilt || 0) * 57.3) + "°"
+      + (h.palm ? " ang=" + Math.round(h.palm.angle * 57.3) + "°" : ""));
   }
   lines.push("", "M menu  H debug  C camara  G grabar  R recargar",
     "mouse: arrastrar, rueda=escala, Shift+rueda=rotar");
@@ -118,7 +124,8 @@ function readDetections(now) {
 
 // Progreso que muestra el anillo de cada cursor: boton "mantener" o levantar el orbe.
 function cursorProgress(h) {
-  return holdProgressOf(h.id);
+  const palm = h.palm && h.palm.pose === "stop" && h.palm.progress > PALM.SHOW_FROM ? h.palm.progress : 0;
+  return Math.max(holdProgressOf(h.id), palm);
 }
 
 function frame(now) {
@@ -141,6 +148,7 @@ function frame(now) {
     detections, video: lastVideo, now: tIn, view: currentView(), extra: mouseStates,
   }).concat(mouseStates);
   updatePointer(store.hands, tIn);
+  updatePartHover(store.hands, { locked: input.arbiter.isLocked() });
   renderCursors(store.hands, { kindAt: hoverKindAt, progressOf: cursorProgress, displayOf: cursorDisplayPoint });
   updateTutorial();
   updateCalibration(store.hands, tIn);
@@ -170,6 +178,7 @@ async function shutdown() {
   for (const it of [...store.items]) removeItem(it);
   store.hands = [];
   renderCursors([], { kindAt: () => null, progressOf: () => 0 });
+  updatePartHover([]);
   await flushState();
   document.getElementById("ui").replaceChildren();
   document.getElementById("hud").classList.remove("visible");
@@ -231,6 +240,11 @@ export async function bootTracker() {
   on("hud:toggle", toggleHud);
   on("app:exit", shutdown);
   // Confirmacion de cada pulsacion de la interfaz: pulso del cursor y click sonoro.
+  on("palm:stop", ({ hand, item, paused }) => {
+    pulseCursor(hand);
+    if (!settings.autoSpin) toast("El giro automático está apagado (Menú › Vista)");
+    else toast((paused ? "Giro detenido · " : "Giro reanudado · ") + (item.title || "modelo"));
+  });
   on("ui:click", ({ hand }) => {
     pulseCursor(hand);
     if (settings.clickSound) playClick();

@@ -7,6 +7,12 @@
 //   update(item, dt, now) opcional: cada frame en el tracker
 //   sync(ri, def, env)    opcional: cada frame en la render page (env = {now, ring})
 //   onTap(item)           opcional: reaccion a un tap
+//   pick(item, x, y)      opcional: hit test fino dentro del cuadro del item.
+//                         null = ese punto no es el item (zona transparente);
+//                         { part } = lo toca (part: pieza bajo el punto, -1 si ninguna)
+//   pieceFree(item, part) / pieceBegin(item, part, hand, x, y) / pieceMove(item, hand, x, y)
+//   pieceEnd(item, hand)  opcional (modelos 3D, fase 7): tomar, arrastrar y soltar piezas
+//   serialize(item)       opcional: campos extra para /state (los lee sync en la render page)
 //   dispose(item)         opcional: liberar recursos (WebGL, video...)
 //   grabbable             default true: se puede agarrar con pinch
 //   rotatable             default false: dos manos / Shift+rueda cambian item.ry
@@ -101,5 +107,6 @@ export function serializeItem(it) {
     rx: it.rx || 0, ry: it.ry || 0, rz: it.rz || 0,
     explode: it.explode || 0, dissolve: it.dissolve || 0,
     g: it.grabbed ? 1 : 0,
+    ...(TYPES.get(it.type) && TYPES.get(it.type).serialize ? TYPES.get(it.type).serialize(it) : {}),
   };
 }

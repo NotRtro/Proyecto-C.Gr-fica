@@ -42,8 +42,9 @@ registerItemType("holo", {
     item.dissolve = 0; item.dissolveTarget = 0;
   },
   update(item, dt, now) {
-    // Giro automatico (Menu > Vista); se pausa mientras se rota con dos manos.
-    if (settings.autoSpin && !item.manipulated) item.ry += HOLO.SPIN * dt;
+    // Giro automatico (Menu > Vista); se pausa mientras se rota con dos manos y
+    // con la palma de "alto" (item.spinPaused, fase 7B).
+    if (settings.autoSpin && !item.manipulated && !item.spinPaused) item.ry += HOLO.SPIN * dt;
     item.view.group.rotation.y = item.ry;
     item.explode += (item.explodeTarget - item.explode) * (1 - Math.exp(-HOLO.EXPLODE_RATE * dt));
     item.dissolve += (item.dissolveTarget - item.dissolve) * (1 - Math.exp(-HOLO.DISSOLVE_RATE * dt));

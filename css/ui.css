@@ -159,10 +159,31 @@ body.menu-open .holo-panel { visibility: visible; opacity: 1; transform: none;
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
 .cursor.progress::after { opacity: 1; }
+/* Palma "perilla" (fase 7B): aro discontinuo que gira mientras se gira el modelo. */
+.cursor.dial { width: 40px; height: 40px; border: 3px dashed var(--holo); background: none;
+  box-shadow: 0 0 14px rgba(95, 227, 255, 0.5); animation: cursor-dial 2.4s linear infinite; }
+@keyframes cursor-dial { to { rotate: 360deg; } }
 /* Pulso al confirmar una pulsacion de la interfaz (docs/14 M7). */
 .cursor.confirm::before { content: ""; position: absolute; inset: -6px; border-radius: 50%;
   border: 2px solid var(--holo); animation: cursor-confirm 0.32s ease-out forwards; }
 @keyframes cursor-confirm { from { transform: scale(0.6); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
+
+/* ---- pieza apuntada (fase 7): etiqueta junto al cursor ---- */
+.part-label { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap;
+  padding: 5px 10px; border-radius: 8px; border: 1px solid var(--holo-line); background: rgba(4, 16, 22, 0.78);
+  color: var(--holo-text); font: 600 14px/1.2 system-ui, sans-serif; letter-spacing: 0.02em;
+  box-shadow: var(--holo-glow); }
+
+/* ---- armado guiado (fase 7E): indicador arriba al centro ---- */
+.guide-banner { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); pointer-events: none;
+  min-width: 300px; max-width: calc(100vw - 32px); padding: 10px 18px; border-radius: 12px; text-align: center;
+  border: 1px solid rgba(255, 192, 77, 0.7); background: rgba(20, 14, 4, 0.72);
+  box-shadow: 0 0 18px rgba(255, 192, 77, 0.3); color: var(--holo-text); }
+.guide-step { font: 600 11px/1.3 var(--holo-mono); letter-spacing: 0.12em; text-transform: uppercase; color: #ffd27a; }
+.guide-label { font: 700 20px/1.25 system-ui, sans-serif; margin-top: 4px; }
+.guide-hint { font: 13px/1.3 system-ui, sans-serif; color: var(--holo-muted); margin-top: 2px; }
+/* en pantallas angostas los avisos (arriba a la derecha) lo taparian */
+@media (max-width: 1100px) { .guide-banner { top: auto; bottom: 18px; } }
 
 /* ---- fin de sesion ---- */
 #endscreen { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;

@@ -5,9 +5,9 @@
 > original. Resume qué se construyó, cómo está organizado, qué reglas sigue el
 > código, qué decisiones se tomaron (y por qué) y qué falta hacer.
 >
-> **Última actualización:** después de la **Fase 6** (catálogo 3D con el modelo
-> Buggy) y de las mejoras previas a la Fase 7 (pinch cerrado + apariencia original
-> de los modelos). Rama `ronaldoPruebas`. Tests: `40 ok, 0 fallas`.
+> **Última actualización:** después de la **Fase 7** (gemelo digital: piezas,
+> gestos de palma, sacar/encajar piezas y armado guiado con el Buggy). Rama
+> `ronaldoPruebas`. Tests: `56 ok, 0 fallas`.
 
 ---
 
@@ -22,7 +22,7 @@ modelo (por ejemplo una bicicleta), desarmarlo en piezas y volver a armarlo.
 Lee CONTEXTO_PROYECTO.md: ahí está el estado, la arquitectura, las reglas del
 código y lo que falta. Trabajamos por fases: primero me propones el plan de la
 fase, lo apruebo, la implementas, la verificas (tests + navegador) y me das un
-informe; yo pruebo con mi cámara y subo los cambios. Sigamos con la Fase 7.
+informe; yo pruebo con mi cámara y subo los cambios. Sigamos con la Fase 8.
 Responde en español.
 ```
 
@@ -32,8 +32,10 @@ Archivos que la IA debería leer primero, en este orden:
 2. `docs/13-plan-interaccion-y-escalabilidad.md` (plan general por fases, con el
    registro detallado de cada fase hecha).
 3. `docs/14-plan-mejora-menu.md` (plan y registro de la mejora del menú, pasos A–D).
-4. `js/core/config.js` (todos los umbrales del sistema en un solo lugar).
-5. `tests/README.md` (cómo probar sin cámara).
+4. `README.md` de la raíz (plan y estado de la Fase 7, tabla de uso).
+5. `media/models/README.md` (qué modelos se pueden desarmar y el formato del manifest).
+6. `js/core/config.js` (todos los umbrales del sistema en un solo lugar).
+7. `tests/README.md` (cómo probar sin cámara).
 
 > Ojo: `docs/` está en `.gitignore`. Si la IA trabaja sobre un clon del
 > repositorio, **esos documentos no estarán**; este archivo sí. (Ver sección 10.)
@@ -66,13 +68,15 @@ Archivos que la IA debería leer primero, en este orden:
 | — | Mejora del menú (docs/14): orbe flotante HeyTECHI, click vs arrastre, punto de intención, permanencia, calibración de la mano | ✅ (pasos A–D) |
 | 6 | Catálogo 3D: modelos GLB, modo holo/sólido, explode por piezas, menú Modelos | ✅ (con el Buggy) |
 | — | Mejoras previas a la 7: pinch con los otros tres dedos recogidos; modelos con su apariencia original (holo solo si no traen) | ✅ |
-| **7** | **Gemelo digital: seleccionar, sacar y encajar piezas; armado guiado** | ⏳ **siguiente** |
-| 8 | Pulido: bloom con alpha, oclusión de mano, OBS, compresión, rendimiento | ⏳ |
+| 7 | Gemelo digital: piezas por jerarquía + manifest, raycast, palma de "alto"/"perilla", sacar y encajar piezas, armado guiado (pasos 7A–7E, ver README) | ✅ (con el Buggy) |
+| **8** | **Pulido: bloom con alpha, oclusión de mano, OBS, compresión, rendimiento** | ⏳ **siguiente** |
 
-**Probado con la cámara real del usuario:** fases 1–5 y pasos A–B del menú (el
-usuario confirmó que "funciona bien"). **Falta confirmar con cámara:** paso C
-(permanencia, cerrar tocando fuera, posición del orbe), calibración (paso D) y la
-Fase 6 con gestos.
+**Probado con la cámara real del usuario:** fases 1–5, pasos A–B del menú y el
+pinch cerrado + apariencia original (el usuario confirmó que "funciona de
+maravilla"). **Falta confirmar con cámara:** paso C (permanencia, cerrar tocando
+fuera, posición del orbe), calibración (paso D), la Fase 6 con gestos y **toda la
+Fase 7** (sobre todo la palma "perilla", que depende de la profundidad z de
+MediaPipe: si no es estable, plan B "volante", ver sección 9).
 
 ---
 
@@ -106,7 +110,7 @@ cámara · `G` grabar gestos (descarga un `.json`) · `R` recargar.
 
 ### Tests
 ```bash
-npm test                      # o: node tests/run.mjs   -> 40 ok
+npm test                      # o: node tests/run.mjs   -> 56 ok
 node tests/make-recordings.mjs   # regenera las grabaciones sintéticas
 node tests/calibrate.mjs <grabacion.json>   # calibración desde una grabación
 ```
@@ -114,7 +118,9 @@ node tests/calibrate.mjs <grabacion.json>   # calibración desde una grabación
 ### Modelos 3D
 Copiar `.glb`/`.gltf` a `media/models/` (o `media/models/<carpeta>/model.glb` +
 `manifest.json`). Aparecen en Menú → Modelos (botón "Actualizar catálogo").
-Hoy hay uno: **`media/models/Buggy.glb`** (descargado de Khronos, ver sección 9).
+Hoy hay uno: **`media/models/Buggy.glb`** (descargado de Khronos, ver sección 11)
+con su manifest **`media/models/Buggy.json`** (16 piezas con nombre; sí se versiona).
+Guía completa para modelos de clientes: `media/models/README.md`.
 
 ---
 
@@ -127,9 +133,10 @@ cámara (o ?replay=)                                  mouse
 hands.js ──── ID estable por mano (h1, h2…)            │
    │                                                    │
 gestures.js ─ estado por mano: cursor (filtro One Euro),│
-   │          ancla, pinch con histéresis, spanPx        │
+   │          ancla, pinch con histéresis, spanPx,       │
+   │          palma ("stop" / "dial")                    │
    └──────────────► arbiter.js ◄─────────────────────────┘
-                    modos: IDLE · GRAB · TWO_HAND · EXPLODE · LOCKED
+                    modos: IDLE · GRAB · PIECE · TWO_HAND · EXPLODE · DIAL · LOCKED
                        │ (adapter)            │ (bus de eventos)
              stage/interaction.js       ui/pointer.js → menú, tutorial, calibración
                        │
@@ -164,7 +171,8 @@ scroll_note, widget, explode, assemble, present, load_model, remove_model`
 | `core/bus.js` | Bus de eventos (lista completa de eventos en el comentario del archivo) |
 | `input/hands.js` | Seguimiento de manos con ID estable; corrige la lateralidad de MediaPipe |
 | `input/gestures.js` | Estado por mano: cursor filtrado, ancla, pinch, `spanPx` |
-| `input/recognizers/pinch.js` | Métricas y transición del pinch (histéresis + 2 frames de confirmación) |
+| `input/recognizers/pinch.js` | Métricas y transición del pinch (histéresis + 2 frames de confirmación); formas "ok" y "closed" |
+| `input/recognizers/palm.js` | Palma de "alto" (quieta 0,6 s) y palma "perilla" (dedos a la cámara, usa la z de MediaPipe) |
 | `input/filters.js` | Filtro One Euro |
 | `input/arbiter.js` | Máquina de estados de gestos (puro, inyectado por adapter) |
 | `input/pipeline.js` | Une las tres etapas anteriores (la usan tracker y tests) |
@@ -174,6 +182,9 @@ scroll_note, widget, explode, assemble, present, load_model, remove_model`
 | `items/registry.js` | Registro de tipos de ítem + alta/baja/serialización |
 | `items/{card,image,ring,holo,model}.js` | Un archivo por tipo (`model` = GLB del catálogo) |
 | `three/` | Geometría y shader del reactor, shader holo para GLB, plan de explode puro |
+| `three/pieces.js` | **Puro (fase 7):** qué es una pieza (`findPieces`), agrupado por manifest, nombres, imán, orden y avance del armado guiado |
+| `three/pieceRig.js` | three.js de las piezas: construirlas, ubicarlas (desarmado + usuario + encaje), raycast, resaltado, silueta, arrastre en el plano de la cámara, sincronía con OBS |
+| `three/modelLook.js` | Puro: ¿el modelo trae apariencia propia? (si no, holográfico) |
 | `stage/tracker.js` | Boot, loop de frames, teclas, HUD, salir |
 | `stage/render.js` | Página para OBS |
 | `stage/interaction.js` | Adapter DOM del árbitro + modelo activo |
@@ -182,6 +193,7 @@ scroll_note, widget, explode, assemble, present, load_model, remove_model`
 | `ui/pointer.js` | Botones con mano/mouse: hover, click, mantener, arrastrar, permanencia |
 | `ui/press.js`, `ui/targeting.js` | Lógica pura: click vs arrastre; a qué botón apunta la mano |
 | `ui/tutorial.js`, `ui/calibration.js`, `ui/feedback.js`, `ui/cursors.js` | Tutorial, asistente de calibración, avisos/sonido, cursores |
+| `ui/partHover.js`, `ui/guide.js` | Fase 7: etiqueta y resaltado de la pieza apuntada; indicador del armado guiado |
 | `net/sync.js`, `net/catalog.js` | Publicar estado; catálogo de modelos |
 | `commands.js` | Registro de comandos de `/cmd` |
 | `css/ui.css` | Estética holográfica (cian translúcido) de toda la interfaz |
@@ -227,9 +239,14 @@ scroll_note, widget, explode, assemble, present, load_model, remove_model`
 | Mantener el pinch 0,45 s sobre el orbe y mover | arrastrar | Mover el orbe (se recuerda la posición) |
 | Pinch rápido en vacío con el menú abierto | clic en vacío | Cerrar menú |
 | Dejar la mano quieta 0,8 s sobre una opción | — | Pulsarla (opcional: Ajustes) |
+| Pasar la mano sobre un modelo **desarmado** | pasar el mouse | Resalta la pieza y muestra su nombre (con `H`, también sus números para el manifest) |
+| Pinch sobre una pieza (modelo desarmado) y arrastrar | arrastrar | Sacarla; su lugar se ve como silueta cian. Soltarla cerca = encaja (imán) |
+| Palma de **"alto"** quieta 0,6 s | Herramientas › Detener giro | Detiene / reanuda el giro del modelo bajo la mano (o el activo) |
+| Palma **"perilla"**: dedos a la cámara + girar la muñeca | Shift+rueda | Gira el modelo poco a poco (queda detenido) |
 
 **Menú (orbe + panel en árbol):** Modelos (catálogo, agregar/quitar, incluido el
-reactor) · Herramientas (Desarmar, Armar, Centrar, Reiniciar escena [mantener]) ·
+reactor) · Herramientas (Desarmar, Armar, Armado guiado, Centrar, Detener/Reanudar
+giro, Reiniciar escena [mantener]) ·
 Vista (Modelos 3D: Original/Holográfico; reactor: wireframe, giro; depuración) ·
 Gestos (ayuda + repetir tutorial) · Ajustes (permanencia, sonido, calibrar mis
 manos, sensibilidad del pinch, cámara, reubicar orbe) · Salir [mantener 1,5 s].
@@ -257,6 +274,14 @@ manos, sensibilidad del pinch, cámara, reubicar orbe) · Salir [mantener 1,5 s]
 | Herramientas/explode actúan sobre el **modelo activo** (último tocado/agregado) | Hay varios modelos en escena |
 | Pinch **"cerrado"** además del "OK": sin la firma OK se exige que las puntas se toquen (ratio x0,6) y que el índice no esté metido en la palma (`f8 > 0,9`) | Pedido del usuario; el puño (f8 ~0,75) sigue sin contar. Umbrales en `PINCH_CLOSED` |
 | Modelos con **apariencia original** por defecto; holográficos solo si no traen texturas ni colores propios (`js/three/modelLook.js`) | Pedido del usuario. El Buggy no tiene texturas pero sí colores, así que se ve original. La preferencia pasó de `modelMode` a `modelLook` para que no pese el "holo" ya guardado |
+| Pieza = **ensamble de la jerarquía** del glTF (hijos del primer nodo que se ramifica), no cada malla | Una rueda de 3 mallas se mueve entera; funciona con cualquier modelo separado en objetos, sin configurar nada |
+| Piezas solo con el modelo **desarmado** (≥ 30 %); armado, el pinch mueve el modelo entero | Decisión del usuario; evita el choque entre "mover el modelo" y "tomar una pieza" |
+| El modelo se agarra por su **silueta** (raycast), no por todo el cuadro de 560 px | Un pinch en un hueco del cuadro es "vacío" (desarmar/armar) |
+| Manifest = **grupos de piezas automáticas** (`parts: [N...]`, números que muestra la etiqueta con `H`) + `rest` | Fácil de escribir para un cliente sin abrir Blender |
+| Arrastre de piezas en el **plano paralelo a la pantalla** que pasa por su centro; el imán se mide **en pantalla** (7 % del cuadro) | "Acercarla a su lugar" es visual; la profundidad no se controla con la mano |
+| Palma de **"alto"** reintroducida (antes se quitó para el menú) pero solo para el giro, con quietud + 500 ms tras soltar un pinch | Pedido del usuario; protegida contra la mano que se abre al soltar |
+| Modelos GLB empiezan en **vista 3/4** (`MODEL.START_RY`) | De frente, el desarmado de un modelo largo va hacia la cámara y las piezas se tapan |
+| Un raycast por punto y frame (memorizado); sin BVH | Medido: 0,35 ms por raycast sobre el Buggy completo (532 mil triángulos) |
 
 ---
 
@@ -275,44 +300,43 @@ manos, sensibilidad del pinch, cámara, reubicar orbe) · Salir [mantener 1,5 s]
   cargan *otra* instancia de los módulos: para verificar, leer el DOM o `/state`.
 - **Audio:** el click sonoro no suena hasta una interacción real (tecla o clic).
 - **Contextos WebGL limitados** (~16 por página): por eso el máximo de 3 modelos.
+- **Panel del navegador oculto (Claude Code):** `requestAnimationFrame` se detiene;
+  cada captura de pantalla avanza un frame. Para probar arrastres sin cámara,
+  disparar `pointerdown`/`pointermove`/`pointerup` y tomar una captura entre cada uno.
+- **Los comandos `/cmd` enviados justo al recargar** los puede consumir la página
+  anterior: esperar a que cargue antes de enviarlos.
+- **Nombres de nodos:** GLTFLoader los "sanea" (`Wheel_FL.001` → `Wheel_FL001`); por
+  eso `pieceRig.js` lee el nombre crudo de `parser.json.nodes`.
 - **`docs/` y `media/**/*.glb` están en `.gitignore`** (ver sección 10).
 
 ---
 
 ## 9. Lo que falta
 
-### Fase 7 — Gemelo digital (siguiente)
+### Fase 7 — hecha (falta probar con cámara)
 
-Objetivo: con el Buggy (y luego la bicicleta) **seleccionar una pieza, sacarla,
-volver a encajarla y armar el modelo paso a paso**.
+Plan, estado por paso y tabla de uso en el `README.md` de la raíz. Resumen:
 
-Propuesta (a confirmar con el usuario antes de implementar):
+- **7A** piezas por jerarquía, raycast con resaltado + etiqueta, agarre por silueta,
+  decodificadores Draco/Meshopt, avisos para modelos de 1 pieza o con esqueleto.
+- **7B** palma de "alto" (detener/reanudar giro) y palma "perilla" (girar).
+  **Plan B si la perilla no es estable con la cámara:** "volante" = palma de alto
+  inclinada (ángulo de la línea de nudillos sin depender de la z). El ángulo ya se
+  calcula igual (`stepPalm`); solo cambiaría la pose que lo activa.
+- **7C/7D** sacar piezas (rol `piece` del árbitro), silueta del lugar original,
+  imán + animación, todas encajadas = el modelo se arma; estado de piezas en
+  `/state` (`items[].pieces = [[i, ux, uy, uz, encajada], ...]`) para OBS.
+- **7E** `media/models/Buggy.json` (16 piezas con nombre y orden; `rest: "Chasis"`),
+  armado guiado (Herramientas), guía `media/models/README.md`.
 
-1. **Apuntar a piezas con raycast** dentro del canvas de cada modelo
-   (`THREE.Raycaster` con el punto de la mano convertido a coordenadas del canvas).
-   Así además el área para agarrar el modelo pasa a ser su **silueta**, no todo el
-   cuadro de 560 px (limitación actual).
-2. **Seleccionar** una pieza: mantener el pinch ~0,6 s sobre ella (gesto #7 del
-   plan, docs/13 sec. 3) → resaltado + etiqueta con su nombre.
-3. **Sacar la pieza:** arrastrarla en el plano de la cámara (despreciar la profundidad).
-4. **Encajar (snap):** al acercarla a su posición original, se imanta y encaja.
-5. **Armado guiado:** el `manifest.json` define el orden; el sistema muestra cuál
-   va ahora y valida.
-6. **Nombres de piezas:** el Buggy no tiene nombres (190 nodos anónimos). Opciones:
-   `manifest.json` con nombres por índice de nodo / agrupar piezas
-   ("rueda trasera izquierda" = varios nodos), o nombrarlas en Blender.
-7. Tests puros para: conversión punto→rayo, snap (distancia/umbral), secuencia de
-   armado; grabaciones sintéticas nuevas.
-
-Formato de manifest sugerido (a definir):
-```json
-{
-  "name": "Buggy",
-  "mode": "solid",
-  "parts": { "12": { "label": "Rueda delantera izq.", "group": "rueda_di" } },
-  "assembly": ["chasis", "eje_delantero", "rueda_di", "rueda_dd"]
-}
-```
+Qué falta probar/ajustar con la cámara real:
+1. Palma "perilla": que MediaPipe dé una `prof=` (panel `H`) clara (> 1) con los
+   dedos a la cámara. Si no, plan B.
+2. Palma de "alto": que no se dispare al soltar un pinch ni al pasar la mano.
+3. Tomar piezas chicas con la mano (si cuesta, agrandar el modelo con dos manos
+   antes, o subir `PIECES.SNAP_FRAC`).
+4. Nombres izquierda/derecha del manifest del Buggy (supuesto: el frente es +z,
+   donde está el parachoques).
 
 ### Fase 8 — Pulido
 - **Bloom con alpha** (docs/04: el bloom estándar de three.js rompe la transparencia de OBS; hace falta un rig propio de render targets).
@@ -325,17 +349,19 @@ Formato de manifest sugerido (a definir):
 - **Rotación pitch** (inclinar el modelo) no implementada (solo yaw).
 - **Modelo de la bicicleta:** conseguirlo segmentado (Sketchfab con filtro
   Downloadable, CGTrader, GrabCAD) o segmentarlo en Blender (`P` → By Loose Parts).
-- **Probar con cámara real:** calibración, Fase 6 con gestos, OBS.
+- **Probar con cámara real:** calibración, Fases 6 y 7 con gestos, OBS.
+- La página de OBS no muestra el resaltado, la silueta ni la pista del armado
+  guiado (son ayudas del operador); decidir si se publican.
+- Comando `/cmd` para el armado guiado (hoy solo desde el menú).
 - **Grabaciones reales** del usuario (tecla G) para tests y calibración.
 - Decidir si se versionan `docs/` y los modelos `.glb` (hoy no se suben).
-- Actualizar el `README.md` de la raíz (todavía describe la versión inicial).
 - Varias acciones heredadas de barehands en la allowlist sin efecto
   (`give`, `yank`, `hover`, `scroll_note`, `widget`, `present`).
 
-### Decisiones abiertas para la Fase 7
-1. ¿Cómo se selecciona una pieza? (mantener pinch 0,6 s — propuesto — o un "modo piezas" desde el menú).
-2. ¿Se pueden sacar piezas solo con el modelo desarmado o también armado?
-3. ¿Nombrar piezas del Buggy con manifest, o esperar a la bicicleta?
+### Decisiones tomadas para la Fase 7
+1. Tomar una pieza = pinch sobre ella, **solo con el modelo desarmado**.
+2. Nombres del Buggy con **manifest** (la bicicleta se agrega cuando exista, con el mismo formato).
+3. La palma de "alto" afecta **solo al modelo de delante**.
 
 ---
 
@@ -344,7 +370,7 @@ Formato de manifest sugerido (a definir):
 | Qué | Por qué | Qué hacer |
 |---|---|---|
 | `docs/*` (incluye docs/13 y docs/14) | `.gitignore` tiene `/docs/*` | Quitar esa línea si se quieren versionar; mientras tanto, este archivo resume lo esencial |
-| `media/models/*.glb` (Buggy) | `.gitignore` ignora medios pesados | Cada integrante descarga el modelo (sección 11) |
+| `media/models/*.glb` (Buggy) | `.gitignore` ignora medios pesados | Cada integrante descarga el modelo (sección 11). Los manifest `.json` y `media/models/README.md` **sí** se versionan |
 | `barehands.json`, `state/*` | Config local y estado de ejecución | `server.py` usa valores por defecto si faltan |
 
 ---
