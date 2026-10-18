@@ -6,9 +6,10 @@
 //   - PIEZAS: cada nodo del glTF que tiene malla es una pieza (si un nodo tiene
 //     varias primitivas/materiales, se mueven juntas). El explode las separa con
 //     js/three/explodePlan.js.
-//   - Modo "holo" (shader holografico, js/three/holoModelMaterial.js) o "solid"
-//     (materiales originales + luz de entorno, docs/04 "Modo solido"); se elige en
-//     Menu > Vista y la render page (OBS) usa el mismo.
+//   - Modo "solid" (materiales originales + luz de entorno, docs/04 "Modo solido")
+//     u "holo" (shader holografico, js/three/holoModelMaterial.js). Por defecto se
+//     ve original y solo es holografico si no trae apariencia propia; Menu > Vista
+//     puede forzar holografico. La render page (OBS) usa lo mismo.
 //   - Resolucion adaptativa: al agrandarlo con dos manos se re-dimensiona el canvas
 //     (sin tirones: solo cuando no esta agarrado, con histeresis).
 //
@@ -20,6 +21,7 @@ import { settings } from "../core/settings.js";
 import { emit } from "../core/bus.js";
 import { buildHoloModelMaterial } from "../three/holoModelMaterial.js";
 import { explodePlan, partFactor } from "../three/explodePlan.js";
+import { hasOwnLook } from "../three/modelLook.js";
 
 let loaderPromise = null;
 function gltfLoader() {
@@ -87,6 +89,7 @@ async function loadInto(view, src) {
   view.holoMat.uniforms.uSpan.value = size.y * k;
 
   obj.traverse((n) => { if (n.isMesh) view.originals.set(n, n.material); });
+  view.hasLook = hasOwnLook([...view.originals.values()].flat().map(describeMaterial));
   view.ready = true;
   view.status.remove();
   view.stats = { parts: view.parts.length, triangles: countTriangles(obj) };
@@ -100,6 +103,17 @@ function countTriangles(obj) {
     t += (g.index ? g.index.count : g.attributes.position.count) / 3;
   });
   return Math.round(t);
+}
+
+function describeMaterial(m) {
+  const textured = ["map", "emissiveMap", "normalMap", "aoMap"].some((k) => !!m[k]);
+  return { textured, color: m.color ? [m.color.r, m.color.g, m.color.b] : [1, 1, 1] };
+}
+
+// Preferencia "original" | "holo" -> modo de ESTE modelo: los que no traen
+// apariencia propia siempre se ven holograficos (js/three/modelLook.js).
+function modeFor(view, look) {
+  return look === "holo" || !view.hasLook ? "holo" : "solid";
 }
 
 // "holo" | "solid"
@@ -213,14 +227,14 @@ registerItemType("model", {
   update(item, dt) {
     if (settings.autoSpin && !item.manipulated) item.ry += HOLO.SPIN * 0.5 * dt;
     item.explode += (item.explodeTarget - item.explode) * (1 - Math.exp(-HOLO.EXPLODE_RATE * dt));
-    applyMode(item.view, settings.modelMode);
+    applyMode(item.view, modeFor(item.view, settings.modelLook));
     ensureResolution(item.view, item.scale, item.grabbed);
     draw(item.view, item.ry, item.explode);
   },
   sync(ri, def, env) {
     ri.ry += ((def.ry || 0) - ri.ry) * FOLLOW_LERP;
     ri.explode += ((def.explode || 0) - ri.explode) * FOLLOW_LERP;
-    applyMode(ri.view, env.view.modelMode || "holo");
+    applyMode(ri.view, modeFor(ri.view, env.view.modelLook || "original"));
     ensureResolution(ri.view, ri.scale, false);
     draw(ri.view, ri.ry, ri.explode);
   },

@@ -121,7 +121,8 @@ registerMenuPage("view", {
   title: "Vista",
   build: (ui) => [
     ui.section("Modelos 3D"),
-    ui.choice("modelMode", [["holo", "Holográfico"], ["solid", "Sólido"]]),
+    ui.choice("modelLook", [["original", "Original"], ["holo", "Holográfico"]]),
+    ui.note("Original: texturas y colores del modelo; si no trae, se ve holográfico."),
     ui.section("Reactor"),
     ui.toggle("wire", "Wireframe"),
     ui.toggle("autoSpin", "Giro automático"),

@@ -26,6 +26,9 @@ Requiere Node 18+. No hay dependencias que instalar.
 | `menu_select.json` | elegir filas: el punto de intencion corrige el salto al juntar los dedos |
 | `menu_dwell.json` | elegir filas dejando la mano quieta (opcion de permanencia) |
 | `calibration.json` | protocolo de calibracion con valores conocidos |
+| `pinch_closed.json` | pinch con medio, anular y menique recogidos: agarra y arrastra igual que el pinch OK |
+| `pinch_mixed.json` | pinch OK que se cierra a mitad del arrastre: no se suelta |
+| `fist.json` | prueba negativa: un puno (incluso con el pulgar sobre la punta del indice) no es pinch |
 
 Las de esta carpeta son **sinteticas** (`synthetic.mjs` arma las manos a partir
 de poses). Tambien se pueden ver en el navegador:

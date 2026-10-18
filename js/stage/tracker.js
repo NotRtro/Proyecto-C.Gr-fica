@@ -67,7 +67,8 @@ function updateHud() {
     const m = h.metrics || {};
     lines.push(h.id + " " + h.handedness + (h.present ? "" : " (perdida)")
       + ": pinch=" + h.pinched + " rol=" + role
-      + " ratio=" + f2(m.ratio) + " arch=" + f2(m.arch) + " back=" + f2(m.backMean));
+      + " ratio=" + f2(m.ratio) + " arch=" + f2(m.arch) + " back=" + f2(m.backMean)
+      + " indice=" + f2(m.f8) + " forma=" + (m.kind || "-"));
   }
   lines.push("", "M menu  H debug  C camara  G grabar  R recargar",
     "mouse: arrastrar, rueda=escala, Shift+rueda=rotar");

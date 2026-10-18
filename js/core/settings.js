@@ -9,7 +9,9 @@ const KEY = "barehands.settings.v1";
 const DEFAULTS = {
   pinchSensitivity: "normal", // "low" (cuesta mas activar) | "normal" | "high"
   wire: true,               // wireframe del holograma
-  modelMode: "holo",        // modelos GLB: "holo" (holografico) | "solid" (colores originales)
+  // modelos GLB: "original" (sus texturas/colores; holografico solo si no traen
+  // apariencia propia) | "holo" (todos holograficos). Reemplaza al viejo "modelMode".
+  modelLook: "original",
   autoSpin: true,           // giro automatico del holograma
   tutorialDone: false,
   dwellSelect: false,       // pulsar botones del menu dejando el cursor quieto (sin pinch)

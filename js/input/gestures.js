@@ -55,6 +55,7 @@ export function createGestureEngine() {
       if (t.present) {
         const m = pinchMetrics(t.lm, video);
         change = stepPinch(s.pinch, m);
+        m.kind = s.pinch.kind; // "ok" | "closed" | null (para el overlay de debug)
         const raw = midpoint(toScreen(t.lm[8], video, view), toScreen(t.lm[4], video, view));
         // Al confirmarse el pinch, el punto medio ya salto (los dedos se juntaron):
         // se reinicia el filtro para que la manipulacion parta de la posicion real

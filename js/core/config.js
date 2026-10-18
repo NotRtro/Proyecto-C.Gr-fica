@@ -10,6 +10,14 @@ export const PINCH = {
   CONFIRM_FRAMES: 2, // frames de camara seguidos para confirmar entrar/salir (anti parpadeo)
 };
 
+// Pinch "cerrado": medio, anular y menique recogidos (js/input/recognizers/pinch.js).
+// Sin la firma OK, lo que lo separa de un puno es que las puntas se tocan de verdad
+// y que el indice no esta metido en la palma (en un puno f8 ~0.75; en este pinch ~1.1).
+export const PINCH_CLOSED = {
+  RATIO_ENTER_K: 0.6, RATIO_HOLD_K: 0.75, // fraccion de PINCH.RATIO_ENTER / RATIO_HOLD (0.21 / 0.34 de fabrica)
+  F8_ENTER: 0.9, F8_HOLD: 0.8,            // extension minima del indice
+};
+
 export const TAP = { MAX_MS: 300, MAX_PX: 26 };
 
 // Seguimiento de manos: identidad estable aunque MediaPipe intercambie Left/Right.
@@ -85,6 +93,12 @@ export const MODEL = {
   MAX_IN_SCENE: 3,    // cada modelo usa un contexto WebGL propio: el navegador admite pocos
   RES_MAX: 2048,      // resolucion maxima del canvas al agrandar el modelo
   RES_HYSTERESIS: 0.25, // solo se re-dimensiona si la escala cambio mas que esto (y no esta agarrado)
+};
+
+// Apariencia propia de un modelo (js/three/modelLook.js): sin ella se ve holografico.
+export const MODEL_LOOK = {
+  SATURATION: 0.08, // max(r,g,b) - min(r,g,b) por encima de esto = color con tono
+  COLOR_STEP: 0.05, // dos grises que difieren menos que esto cuentan como el mismo
 };
 
 // Mismas tasas que core/hologram.py.

@@ -17,6 +17,7 @@ import { analyzeHand } from "../js/input/calibration.js";
 import { setSetting } from "../js/core/settings.js";
 import { samplesFromRecording } from "./calibrate.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
+import { hasOwnLook } from "../js/three/modelLook.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VIEW = { w: 1280, h: 720 };
@@ -145,6 +146,29 @@ test("hand_swap: la etiqueta Left/Right alterna y la mano se pierde 100ms sin so
 test("palm: la mano abierta y quieta no dispara nada (ni pinch ni tap)", () => {
   const s = makeScene();
   play(loadRec("palm"), s);
+  check(s.events.length === 0, "no deberia haber eventos, hubo: " + s.events.map((e) => e.e).join(","));
+});
+
+test("pinch_closed: pinch con medio, anular y menique recogidos agarra y arrastra", () => {
+  const s = makeScene();
+  play(loadRec("pinch_closed"), s);
+  check(s.count("grab:start") === 1 && s.count("grab:end") === 1, "debe haber 1 agarre y 1 soltar");
+  near(s.byId("holo").x, 840, 10, "x final del reactor");
+  check(!s.byId("holo").grabbed, "al final no debe quedar agarrado");
+});
+
+test("pinch_mixed: un pinch OK que se cierra a mitad del arrastre no se suelta", () => {
+  const s = makeScene();
+  play(loadRec("pinch_mixed"), s);
+  check(s.count("cursor:pinch-start") === 1, "un solo pinch, hubo " + s.count("cursor:pinch-start"));
+  check(s.count("grab:start") === 1 && s.count("grab:end") === 1, "1 agarre y 1 soltar");
+  // el punto de pinch de la pose cerrada esta 12 px a la izquierda del de la pose OK
+  near(s.byId("holo").x, 828, 12, "x final del reactor");
+});
+
+test("fist: un puno sobre el reactor no es pinch (ni el apretado con el pulgar en la punta)", () => {
+  const s = makeScene();
+  play(loadRec("fist"), s);
   check(s.events.length === 0, "no deberia haber eventos, hubo: " + s.events.map((e) => e.e).join(","));
 });
 
@@ -518,6 +542,17 @@ test("explode: partFactor va de 0 a 1 con lag, suave y sin pasarse", () => {
   let prev = 0;
   for (let f = 0; f <= 1.0001; f += 0.05) { const v = partFactor(f, 0.2); check(v >= prev - 1e-12, "monotono"); prev = v; }
   near(partFactor(1.5, 0), 1, 1e-9, "no se pasa de 1");
+});
+
+test("apariencia: con texturas o colores propios se ve original; sin nada, holografico", () => {
+  const mat = (color, textured = false) => ({ textured, color });
+  check(!hasOwnLook([]), "sin materiales -> holografico");
+  check(!hasOwnLook([mat([1, 1, 1])]), "solo el blanco por defecto de GLTFLoader -> holografico");
+  check(!hasOwnLook([mat([0.8, 0.8, 0.8]), mat([0.8, 0.8, 0.8])]), "todo el gris de fabrica de Blender -> holografico");
+  check(hasOwnLook([mat([1, 1, 1], true)]), "con textura -> original");
+  // colores reales del Buggy (sin texturas): rojo, gris y blanco
+  check(hasOwnLook([mat([0.54, 0.25, 0.25]), mat([0.4, 0.4, 0.4]), mat([1, 1, 1])]), "Buggy -> original");
+  check(hasOwnLook([mat([0.9, 0.9, 0.9]), mat([0.1, 0.1, 0.1])]), "blanco y negro -> original");
 });
 
 console.log("\n" + passed + " ok, " + failed + " fallas");

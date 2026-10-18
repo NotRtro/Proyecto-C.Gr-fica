@@ -16,6 +16,13 @@ const BASE = {
   18: [0.55, -1.2], 19: [0.6, -1.45], 20: [0.65, -1.65],
 };
 
+// medio, anular y menique recogidos hacia la palma
+const CURLED = {
+  10: [0, -1.25], 11: [0.02, -1.0], 12: [0.02, -0.85],
+  14: [0.27, -1.2], 15: [0.28, -1.0], 16: [0.27, -0.85],
+  18: [0.52, -1.05], 19: [0.52, -0.9], 20: [0.5, -0.8],
+};
+
 const POSES = {
   // indice doblado tocando el pulgar ("OK")
   pinch: { 4: [-0.35, -1.05], 6: [-0.3, -1.3], 7: [-0.35, -1.25], 8: [-0.3, -1.1] },
@@ -23,6 +30,14 @@ const POSES = {
   open: { 4: [-0.8, -0.6], 6: [-0.3, -1.3], 7: [-0.35, -1.25], 8: [-0.3, -1.1] },
   // palma abierta: cuatro dedos estirados y pulgar separado
   palm: { 4: [-0.9, -0.5], 6: [-0.3, -1.35], 7: [-0.33, -1.65], 8: [-0.35, -1.95] },
+  // pinch "cerrado": puntas de pulgar e indice juntas, medio/anular/menique recogidos
+  pinch_closed: { 4: [-0.45, -1.0], 6: [-0.3, -1.3], 7: [-0.4, -1.2], 8: [-0.42, -1.05], ...CURLED },
+  // soltando el pinch cerrado: se abre el pulgar, los otros tres siguen recogidos
+  open_closed: { 4: [-0.8, -0.6], 6: [-0.3, -1.3], 7: [-0.4, -1.2], 8: [-0.42, -1.05], ...CURLED },
+  // puno: el indice tambien metido en la palma y el pulgar cruzado encima
+  fist: { 4: [-0.12, -1.05], 6: [-0.27, -1.2], 7: [-0.2, -0.95], 8: [-0.18, -0.78], ...CURLED },
+  // puno con la punta del pulgar sobre la del indice: solo el corte de f8 lo rechaza
+  fist_tight: { 4: [-0.2, -0.85], 6: [-0.27, -1.2], 7: [-0.2, -0.95], 8: [-0.18, -0.78], ...CURLED },
 };
 
 // Punto de pinch de la pose "pinch" (medio entre 4 y 8) respecto de la muneca.
@@ -221,6 +236,39 @@ export function scenarios() {
     for (let k = 0; k < 4; k++) { still(10, "open"); still(10, "pinch"); }
     still(10, "open");
     out.calibration = tl.build();
+  }
+
+  // 12. Pinch "cerrado" (medio, anular y menique abajo): agarra el reactor y lo
+  //     arrastra +200 px igual que el pinch OK.
+  {
+    const tl = createTimeline("pinch con los otros tres dedos recogidos: agarra y arrastra +200px");
+    tl.repeat(8, () => [hand("open_closed", 600, 300)]);
+    tl.repeat(30, (i, n) => [hand("pinch_closed", lerp(600, 800, i / (n - 1)), 300)]);
+    tl.repeat(15, () => [hand("pinch_closed", 800, 300)]);
+    tl.repeat(10, () => [hand("open_closed", 800, 300)]);
+    out.pinch_closed = tl.build();
+  }
+
+  // 13. Empieza con pinch OK y a mitad del arrastre recoge los otros tres dedos:
+  //     NO debe soltarse.
+  {
+    const tl = createTimeline("pinch OK que se cierra a mitad del arrastre: no se suelta");
+    tl.repeat(8, () => [hand("open", 600, 300)]);
+    tl.repeat(15, (i, n) => [hand("pinch", lerp(600, 700, i / (n - 1)), 300)]);
+    tl.repeat(15, (i, n) => [hand("pinch_closed", lerp(700, 800, i / (n - 1)), 300)]);
+    tl.repeat(10, () => [hand("pinch_closed", 800, 300)]);
+    tl.repeat(10, () => [hand("open_closed", 800, 300)]);
+    out.pinch_mixed = tl.build();
+  }
+
+  // 14. Prueba negativa: un puno (y un puno apretado con el pulgar sobre la punta
+  //     del indice) que pasa sobre el reactor no es pinch.
+  {
+    const tl = createTimeline("puno moviendose sobre el reactor: no debe agarrar nada");
+    tl.repeat(30, (i, n) => [hand("fist", lerp(500, 800, i / (n - 1)), 300)]);
+    tl.repeat(30, (i, n) => [hand("fist_tight", lerp(800, 500, i / (n - 1)), 300)]);
+    tl.repeat(8, () => [hand("open", 500, 300)]);
+    out.fist = tl.build();
   }
 
   return out;

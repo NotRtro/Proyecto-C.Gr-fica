@@ -1,7 +1,7 @@
 // Pinch (docs/05). Funciones puras: reciben landmarks y devuelven numeros, sin
 // tocar DOM ni estado global.
 import { dist } from "../../core/util.js";
-import { PINCH } from "../../core/config.js";
+import { PINCH, PINCH_CLOSED } from "../../core/config.js";
 import { toVideoPx } from "../coords.js";
 
 // Cuanto se extiende cada dedo: dist(punta, muneca) / dist(nudillo, muneca).
@@ -21,22 +21,37 @@ export function pinchMetrics(lm, video) {
   return { ratio, arch: backMean - f8, backMean, span, f8, f12, f16, f20 };
 }
 
+// Dos formas de hacer pinch:
+//   "ok"     indice doblado y los otros tres dedos estirados (firma OK de docs/05).
+//   "closed" medio, anular y menique recogidos. Un puno tambien acerca pulgar e
+//            indice, asi que se exige que las puntas se toquen de verdad (corte de
+//            ratio mas estricto) y que el indice no este metido en la palma (f8).
+// Los cortes de "closed" son una fraccion de los de "ok": la calibracion y la
+// sensibilidad los mueven juntos.
 // Histeresis: entrar exige umbrales estrictos, mantener usa umbrales laxos.
-export function pinchTransition(wasPinched, m) {
-  if (!wasPinched) {
-    return m.arch > PINCH.ARCH_ENTER && m.backMean > PINCH.BACKMEAN_ENTER && m.ratio < PINCH.RATIO_ENTER;
-  }
-  return m.arch > PINCH.ARCH_HOLD && m.backMean > PINCH.BACKMEAN_HOLD && m.ratio < PINCH.RATIO_HOLD;
+// Devuelve "ok", "closed" o null.
+export function pinchKind(wasPinched, m) {
+  const ok = wasPinched
+    ? m.arch > PINCH.ARCH_HOLD && m.backMean > PINCH.BACKMEAN_HOLD && m.ratio < PINCH.RATIO_HOLD
+    : m.arch > PINCH.ARCH_ENTER && m.backMean > PINCH.BACKMEAN_ENTER && m.ratio < PINCH.RATIO_ENTER;
+  if (ok) return "ok";
+  const closed = wasPinched
+    ? m.f8 > PINCH_CLOSED.F8_HOLD && m.ratio < PINCH.RATIO_HOLD * PINCH_CLOSED.RATIO_HOLD_K
+    : m.f8 > PINCH_CLOSED.F8_ENTER && m.ratio < PINCH.RATIO_ENTER * PINCH_CLOSED.RATIO_ENTER_K;
+  return closed ? "closed" : null;
 }
 
-export function createPinchState() { return { pinched: false, raw: false, pending: 0 }; }
+export function pinchTransition(wasPinched, m) { return pinchKind(wasPinched, m) !== null; }
+
+export function createPinchState() { return { pinched: false, raw: false, pending: 0, kind: null }; }
 
 // Avanza un frame de camara. Ademas de la histeresis exige CONFIRM_FRAMES
 // frames seguidos para cambiar de estado. Devuelve "start", "end" o null.
 // `st.raw` indica si ESTE frame cumple el criterio (util para congelar el
 // ancla mientras se confirma la salida).
 export function stepPinch(st, m) {
-  st.raw = pinchTransition(st.pinched, m);
+  st.kind = pinchKind(st.pinched, m);
+  st.raw = st.kind !== null;
   if (st.raw === st.pinched) { st.pending = 0; return null; }
   st.pending++;
   if (st.pending < PINCH.CONFIRM_FRAMES) return null;

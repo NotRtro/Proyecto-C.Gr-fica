@@ -13,7 +13,7 @@ function buildPayload() {
   const payload = {
     cursors: {}, items: [],
     ring: { state: store.ring.state, mood: store.ring.mood, wave: store.ring.wave, name: store.cfg.name },
-    view: { wire: settings.wire, modelMode: settings.modelMode },
+    view: { wire: settings.wire, modelLook: settings.modelLook },
   };
   for (const h of store.hands) {
     if (h.source !== "hand" || !h.present) continue;
