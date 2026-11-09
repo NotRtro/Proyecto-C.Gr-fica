@@ -6,7 +6,7 @@ import { tapTravel } from "../js/input/arbiter.js";
 import { pinchStrength, pinchGates, pinchKind, pinchFailure } from "../js/input/recognizers/pinch.js";
 import { frameToDetections } from "../js/input/recorder.js";
 import { createPointFilter } from "../js/input/filters.js";
-import { CURSOR_FILTER, PINCH, UI_TARGET, UI_PRESS } from "../js/core/config.js";
+import { CURSOR_FILTER, PINCH, UI_TARGET, UI_PRESS, TAP, EXPLODE_DRAG, HOLO } from "../js/core/config.js";
 import { createPress, stepPress, endPress, clickTravel } from "../js/ui/press.js";
 import { stickyTarget, nearestIn, pickIntent, magnetPoint, createDwell, stepDwell } from "../js/ui/targeting.js";
 import { analyzeHand, minCutoffFor, fitPinchGates, fistModelStats } from "../js/input/calibration.js";
@@ -16,6 +16,8 @@ import { hand } from "./synthetic.mjs";
 import { setSetting } from "../js/core/settings.js";
 import { samplesFromRecording } from "./calibrate.mjs";
 import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, trialDwell, trialHold, sweepMenu } from "./menuBench.mjs";
+import { trialJoin, trialHoldStill, trialHoldAfterMove, summary } from "./twoHandBench.mjs";
+import { trialEmptyTap, trialExplodeDrag, trialVerticalDrag } from "./explodeBench.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
 import {
@@ -40,6 +42,10 @@ function makeScene({ card = false } = {}) {
         if (Math.abs(x - it.x) <= hw && Math.abs(y - it.y) <= hh) return it;
       }
       return null;
+    },
+    boundsOf(it) {
+      const hw = (it.w * it.scale) / 2, hh = (it.h * it.scale) / 2;
+      return { left: it.x - hw, right: it.x + hw, top: it.y - hh, bottom: it.y + hh };
     },
     findItem: (id) => items.find((i) => i.id === id) || null,
     findExplodable: () => items.find((i) => i.explodable) || null,
@@ -260,7 +266,8 @@ test("mouse: arrastre rapido en vacio (un solo frame) igual cuenta todo el recor
   step(mouseState(100, 640, true, "start"));
   step(mouseState(420, 640, true));
   step(mouseState(420, 640, false, "end"));
-  near(s.byId("holo").explodeTarget, ((320 - 24) / 320) * 2.2, 0.001, "explode tras salto de 320px");
+  const full = EXPLODE_DRAG.MOUSE_FULL;
+  near(s.byId("holo").explodeTarget, ((full - TAP.MOUSE_PX) / full) * HOLO.EXPLODE_OUT, 0.001, "explode tras salto de 320px");
 });
 
 test("bloqueo (menu, fase 5): suelta lo agarrado y los taps no tocan la escena", () => {
@@ -1057,6 +1064,67 @@ test("mantener: aguanta una deriva lenta de la mano de 40 px/s y cancela una de 
   }
 });
 
+console.log("dos manos (escalar y girar):");
+
+test("dos manos: al pinchar salta el cursor, pero no el nudillo que sostiene la barra", () => {
+  const tracker = createHandTracker(), engine = createGestureEngine();
+  const video = { videoWidth: 1280, videoHeight: 720 }, view = { w: 1280, h: 720 };
+  const step = (pose, t) => engine.update(tracker.update(frameToDetections({ hands: [hand(pose, 600, 300)] }), t), video, t, view)[0];
+  let t = 0, open, closed;
+  for (let i = 0; i < 20; i++, t += 33) open = step("open", t);
+  for (let i = 0; i < 20; i++, t += 33) closed = step("pinch", t);
+  check(Math.hypot(closed.ax - open.ax, closed.ay - open.ay) > 20, "el cursor deberia saltar al pinchar");
+  check(Math.hypot(closed.kx - open.kx, closed.ky - open.ky) < 2, "el nudillo se movio " + Math.hypot(closed.kx - open.kx, closed.ky - open.ky).toFixed(1) + " px");
+});
+
+test("dos manos: la segunda mano se une igual con el objeto chico, normal o grande", () => {
+  for (const scale of [0.3, 1, 2]) {
+    for (let s = 1; s <= 15; s++) {
+      check(trialJoin(s, { scale, outside: 40 }).ok, "escala " + scale + ", 40 px fuera del borde: no se unio (semilla " + s + ")");
+      check(!trialJoin(s, { scale, outside: 160 }).ok, "escala " + scale + ", 160 px fuera del borde: se unio (semilla " + s + ")");
+    }
+  }
+});
+
+test("dos manos: al unirse, el modelo casi no cambia de tamano ni de giro", () => {
+  const sc = summary(20, (s) => trialHoldStill(s, { tremor: 4 }), "scaleErr");
+  const rot = summary(20, (s) => trialHoldStill(s, { tremor: 4 }), "rotDeg");
+  check(sc.p90 <= 0.02, "escala p90 " + (sc.p90 * 100).toFixed(1) + " %");
+  check(rot.p90 <= 1, "giro p90 " + rot.p90.toFixed(1) + " grados");
+});
+
+test("dos manos: quietas despues de escalar y girar, el modelo no oscila", () => {
+  const sc = summary(20, (s) => trialHoldAfterMove(s, { tremor: 4 }), "scaleErr");
+  check(sc.p90 <= 0.015, "escala p90 " + (sc.p90 * 100).toFixed(1) + " %");
+});
+
+console.log("desarmar con pinch en vacio:");
+
+test("desarmar: un tap en vacio nunca desarma, con la mano lejos o muy cerca y temblor fuerte", () => {
+  for (const span of [60, 110, 200, 260]) {
+    for (let s = 1; s <= 15; s++) {
+      const r = trialEmptyTap(s, { span, tremor: 8 * span / 110 });
+      check(r.ok, "mano de " + span + " px: " + (r.exploded ? "desarmo" : "no fue tap") + " (semilla " + s + ")");
+    }
+  }
+});
+
+test("desarmar: el mismo movimiento del brazo desarma lo mismo con la mano lejos, normal o cerca", () => {
+  const reach = [60, 110, 200].map((span) => {
+    let sum = 0;
+    for (let s = 1; s <= 8; s++) sum += trialExplodeDrag(s, { span, tremor: 4 * span / 110 }).reached;
+    return sum / 8;
+  });
+  check(Math.max(...reach) - Math.min(...reach) < 0.05, "desarmado: " + reach.map((r) => (r * 100).toFixed(0) + " %").join(" / "));
+});
+
+test("desarmar: arrastrar en vertical no desarma", () => {
+  for (const span of [60, 110, 200]) {
+    for (let s = 1; s <= 10; s++) {
+      check(trialVerticalDrag(s, { span, tremor: 4 * span / 110 }).ok, "mano de " + span + " px desarmo (semilla " + s + ")");
+    }
+  }
+});
 
 console.log("\n" + passed + " ok, " + failed + " fallas");
 process.exit(failed ? 1 : 0);

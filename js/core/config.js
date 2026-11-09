@@ -79,12 +79,15 @@ export const UI_TARGET = {
 export const TWO_HAND = {
   SCALE_MIN: 0.3, SCALE_MAX: 3.0,
   ROT_DEADZONE: 3 * Math.PI / 180,
-  JOIN_PX: 320,
+  SCALE_DEADZONE: 0.02,
+  JOIN_SPAN: 0.8,
+  JOIN_MIN: 40, JOIN_MAX: 200,
 };
 
 export const EXPLODE_DRAG = {
-  START_PX: 24,
-  PX_FULL: 320,
+  FULL_SPAN: 2.9,
+  FULL_MIN: 120, FULL_MAX: 640,
+  MOUSE_FULL: 320,
 };
 
 export const MOUSE = {

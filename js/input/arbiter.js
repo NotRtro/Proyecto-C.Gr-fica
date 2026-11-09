@@ -13,6 +13,23 @@ function wrapAngle(a) {
 
 function deadzone(a, dz) { return Math.sign(a) * Math.max(0, Math.abs(a) - dz); }
 
+function backlash(out, raw, dz) { return clamp(out, raw - dz, raw + dz); }
+
+function edgeDistance(p, b) {
+  const dx = Math.max(b.left - p.x, 0, p.x - b.right);
+  const dy = Math.max(b.top - p.y, 0, p.y - b.bottom);
+  return Math.hypot(dx, dy);
+}
+
+export function explodeTravel(source, spanPx) {
+  if (source === "mouse" || !spanPx) return EXPLODE_DRAG.MOUSE_FULL;
+  return clamp(spanPx * EXPLODE_DRAG.FULL_SPAN, EXPLODE_DRAG.FULL_MIN, EXPLODE_DRAG.FULL_MAX);
+}
+
+export function joinMargin(spanPx) {
+  return clamp((spanPx || 0) * TWO_HAND.JOIN_SPAN, TWO_HAND.JOIN_MIN, TWO_HAND.JOIN_MAX);
+}
+
 export function tapTravel(source, spanPx) {
   if (source === "mouse" || !spanPx) return TAP.MOUSE_PX;
   return clamp(spanPx * TAP.TRAVEL_SPAN, TAP.MIN_PX, TAP.MAX_PX);
@@ -25,7 +42,7 @@ export function createArbiter(adapter) {
   let locked = false;
 
   function rec(id) {
-    if (!hands.has(id)) hands.set(id, { id, role: "idle", itemId: null, ax: 0, ay: 0 });
+    if (!hands.has(id)) hands.set(id, { id, role: "idle", itemId: null, ax: 0, ay: 0, kx: 0, ky: 0 });
     return hands.get(id);
   }
 
@@ -33,6 +50,11 @@ export function createArbiter(adapter) {
     const n = (held.get(item.id) || 0) + delta;
     if (n <= 0) { held.delete(item.id); adapter.onGrab(item, false); }
     else { if (!held.has(item.id)) adapter.onGrab(item, true); held.set(item.id, n); }
+  }
+
+  function boundsOf(item) {
+    if (adapter.boundsOf) return adapter.boundsOf(item);
+    return { left: item.x, right: item.x, top: item.y, bottom: item.y };
   }
 
   function startGrab(r, item) {
@@ -65,16 +87,24 @@ export function createArbiter(adapter) {
     r.role = "idle"; r.itemId = null; r.part = null;
   }
 
+  function barOf(A, B) {
+    return {
+      d: Math.max(dist({ x: A.kx, y: A.ky }, { x: B.kx, y: B.ky }), 1),
+      ang: Math.atan2(B.ky - A.ky, B.kx - A.kx),
+      mid: { x: (A.kx + B.kx) / 2, y: (A.ky + B.ky) / 2 },
+    };
+  }
+
   function startSession(ra, rb, item) {
     ra.role = "two-hand"; rb.role = "two-hand";
     rb.itemId = item.id;
     hold(item, +1);
+    const bar = barOf(ra, rb);
     session = {
       itemId: item.id, a: ra.id, b: rb.id,
-      d0: Math.max(dist({ x: ra.ax, y: ra.ay }, { x: rb.ax, y: rb.ay }), 1),
-      ang0: Math.atan2(rb.ay - ra.ay, rb.ax - ra.ax),
-      mid0: { x: (ra.ax + rb.ax) / 2, y: (ra.ay + rb.ay) / 2 },
+      d0: bar.d, ang0: bar.ang, mid0: bar.mid,
       scale0: item.scale || 1, ry0: item.ry || 0, pos0: { x: item.x, y: item.y },
+      logScale: 0, turn: 0,
     };
     item.manipulated = true;
     adapter.emit("twohand:start", { item });
@@ -83,16 +113,15 @@ export function createArbiter(adapter) {
   function updateSession() {
     const item = adapter.findItem(session.itemId);
     if (!item) { endSession(null); return; }
-    const A = hands.get(session.a), B = hands.get(session.b);
-    const d = dist({ x: A.ax, y: A.ay }, { x: B.ax, y: B.ay });
-    const scale = clamp(session.scale0 * d / session.d0, TWO_HAND.SCALE_MIN, TWO_HAND.SCALE_MAX);
+    const bar = barOf(hands.get(session.a), hands.get(session.b));
+    session.logScale = backlash(session.logScale, Math.log(bar.d / session.d0), TWO_HAND.SCALE_DEADZONE);
+    const scale = clamp(session.scale0 * Math.exp(session.logScale), TWO_HAND.SCALE_MIN, TWO_HAND.SCALE_MAX);
     item.scale += (scale - item.scale) * FOLLOW_LERP;
     if (adapter.canRotate(item)) {
-      const dAng = wrapAngle(Math.atan2(B.ay - A.ay, B.ax - A.ax) - session.ang0);
-      item.ry = session.ry0 + deadzone(dAng, TWO_HAND.ROT_DEADZONE);
+      session.turn = backlash(session.turn, wrapAngle(bar.ang - session.ang0), TWO_HAND.ROT_DEADZONE);
+      item.ry = session.ry0 + session.turn;
     }
-    const mid = { x: (A.ax + B.ax) / 2, y: (A.ay + B.ay) / 2 };
-    const tx = session.pos0.x + mid.x - session.mid0.x, ty = session.pos0.y + mid.y - session.mid0.y;
+    const tx = session.pos0.x + bar.mid.x - session.mid0.x, ty = session.pos0.y + bar.mid.y - session.mid0.y;
     item.x += (tx - item.x) * FOLLOW_LERP;
     item.y += (ty - item.y) * FOLLOW_LERP;
     adapter.onMoved(item);
@@ -121,6 +150,7 @@ export function createArbiter(adapter) {
     r.pinchT = now;
     r.start = { x: h.ax, y: h.ay };
     r.tapTravel = tapTravel(h.source, h.spanPx);
+    r.exFull = explodeTravel(h.source, h.spanPx);
     adapter.emit("cursor:pinch-start", { hand: h.id, x: h.ax, y: h.ay, source: h.source, spanPx: h.spanPx });
     if (locked) { r.role = "locked"; return; }
     if (adapter.isUiAt && adapter.isUiAt(h.ax, h.ay)) { r.role = "ui"; return; }
@@ -133,7 +163,7 @@ export function createArbiter(adapter) {
     if (holder && !session) {
       const hItem = adapter.findItem(holder.itemId);
       const near = hItem && (item === hItem ||
-        (!item && dist({ x: h.ax, y: h.ay }, hItem) <= TWO_HAND.JOIN_PX));
+        (!item && edgeDistance({ x: h.ax, y: h.ay }, boundsOf(hItem)) <= joinMargin(h.spanPx)));
       if (near) { startSession(holder, r, hItem); return; }
     }
     if (item && !held.has(item.id)) startGrab(r, item);
@@ -155,21 +185,21 @@ export function createArbiter(adapter) {
       adapter.onMoved(item);
     } else if (r.role === "explode-pending") {
       const dx = h.ax - r.start.x, dy = h.ay - r.start.y;
-      if (Math.abs(dx) >= EXPLODE_DRAG.START_PX && Math.abs(dx) > 1.5 * Math.abs(dy)) {
+      if (Math.abs(dx) >= r.tapTravel && Math.abs(dx) > 1.5 * Math.abs(dy)) {
         const target = adapter.findExplodable();
         if (!target) { r.role = "none"; return; }
         r.role = "explode"; r.itemId = target.id;
-        r.exStartX = r.start.x + Math.sign(dx) * EXPLODE_DRAG.START_PX;
+        r.exStartX = r.start.x + Math.sign(dx) * r.tapTravel;
         r.ex0 = target.explodeTarget || 0;
         adapter.emit("explode:start", { item: target });
-      } else if (Math.abs(dy) >= EXPLODE_DRAG.START_PX) {
+      } else if (Math.abs(dy) >= r.tapTravel) {
         r.role = "none";
       }
     }
     if (r.role === "explode") {
       const item = adapter.findItem(r.itemId);
       if (!item) { r.role = "none"; r.itemId = null; return; }
-      const f = (h.ax - r.exStartX) / EXPLODE_DRAG.PX_FULL;
+      const f = (h.ax - r.exStartX) / r.exFull;
       item.explodeTarget = clamp(r.ex0 + f * HOLO.EXPLODE_OUT, 0, HOLO.EXPLODE_OUT);
     }
   }
@@ -230,7 +260,10 @@ export function createArbiter(adapter) {
   function update(states, now) {
     for (const h of states) {
       const r = rec(h.id);
-      if (h.present || h.removed) { r.ax = h.ax; r.ay = h.ay; }
+      if (h.present || h.removed) {
+        r.ax = h.ax; r.ay = h.ay;
+        r.kx = h.kx ?? h.ax; r.ky = h.ky ?? h.ay;
+      }
       if (h.pinchChanged === "start") onPinchStart(h, r, now);
       if (h.pinched && h.present && h.pinchChanged !== "end") onPinchHold(h, r);
       if (h.pinchChanged === "end") onPinchEnd(h, r, now, !h.removed);

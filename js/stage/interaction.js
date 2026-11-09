@@ -41,6 +41,7 @@ const typeOf = (item) => getItemType(item.type);
 
 const adapter = {
   hitTest: itemAt,
+  boundsOf: (item) => item.el.getBoundingClientRect(),
   pieceAt,
   beginPiece: (item, part, hand, x, y) => typeOf(item).pieceBegin(item, part, hand, x, y),
   movePiece: (item, hand, x, y) => typeOf(item).pieceMove(item, hand, x, y),
