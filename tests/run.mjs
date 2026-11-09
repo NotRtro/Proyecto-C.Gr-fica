@@ -18,7 +18,7 @@ import { samplesFromRecording } from "./calibrate.mjs";
 import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, trialDwell, trialHold, sweepMenu } from "./menuBench.mjs";
 import { trialJoin, trialHoldStill, trialHoldAfterMove, summary } from "./twoHandBench.mjs";
 import { trialEmptyTap, trialExplodeDrag, trialVerticalDrag } from "./explodeBench.mjs";
-import { trialStop, trialPalmOverMenu, sweepPalm } from "./palmBench.mjs";
+import { trialStop, trialPalmOverMenu, sweepPalm, trialDial } from "./palmBench.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
 import {
@@ -1164,6 +1164,46 @@ test("palma: con 0,6 s una palma que pasa ya se activa (por eso 0,8 s)", () => {
     check(n > 0, "con 0,6 s deberia activarse al pasar");
   } finally {
     PALM.STOP_MS = keep;
+  }
+});
+
+console.log("palma perilla (girar la muneca):");
+
+const dialJitter = (noise) => {
+  const xs = [];
+  for (let s = 1; s <= 15; s++) xs.push(trialDial(s, { noise }).jitter);
+  return xs.sort((a, b) => a - b)[Math.floor(0.9 * xs.length)];
+};
+
+test("perilla: con ruido en cada punto (3 px), el modelo no tiembla al sostener la mano quieta", () => {
+  const j = dialJitter(3);
+  check(j <= 1.5, "temblor p90 " + j.toFixed(1) + " grados");
+});
+
+test("perilla: sin el filtro del angulo ni la holgura, ese mismo ruido si hace temblar el modelo", () => {
+  const keep = { filter: PALM.ANGLE_FILTER, dz: PALM.DIAL_DEADZONE };
+  PALM.ANGLE_FILTER = { minCutoff: 1e6, beta: 0, dCutoff: 1 };
+  PALM.DIAL_DEADZONE = 0;
+  try {
+    const j = dialJitter(3);
+    check(j > 5, "sin proteccion deberia temblar: p90 " + j.toFixed(1) + " grados");
+  } finally {
+    PALM.ANGLE_FILTER = keep.filter;
+    PALM.DIAL_DEADZONE = keep.dz;
+  }
+});
+
+test("perilla: con ruido en cada punto la sesion no se corta y gira lo pedido", () => {
+  for (let s = 1; s <= 15; s++) {
+    const r = trialDial(s, { noise: 3 });
+    check(r.sessions === 1 && r.ends === 0, "sesion cortada (semilla " + s + ")");
+    check(Math.abs(r.turned - 36) <= 4, "giro " + r.turned.toFixed(1) + " grados en vez de 36 (semilla " + s + ")");
+  }
+});
+
+test("perilla: sobre el menu abierto no empieza a girar el modelo", () => {
+  for (let s = 1; s <= 10; s++) {
+    check(trialPalmOverMenu(s, { pose: "dial" }).dials === 0, "empezo la perilla sobre el menu (semilla " + s + ")");
   }
 });
 

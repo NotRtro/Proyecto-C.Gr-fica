@@ -27,3 +27,17 @@ export function createPointFilter(params) {
     reset() { fx.reset(); fy.reset(); },
   };
 }
+
+export function createAngleFilter(params) {
+  const f = createOneEuro(params);
+  let last = null, unwrapped = 0;
+  return {
+    filter(angle, tMs) {
+      if (last === null) unwrapped = angle;
+      else unwrapped += Math.atan2(Math.sin(angle - last), Math.cos(angle - last));
+      last = angle;
+      return f.filter(unwrapped, tMs);
+    },
+    reset() { f.reset(); last = null; unwrapped = 0; },
+  };
+}

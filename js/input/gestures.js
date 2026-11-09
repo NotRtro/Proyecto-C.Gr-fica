@@ -1,7 +1,7 @@
 import { midpoint } from "../core/util.js";
 import { CURSOR_FILTER, PALM } from "../core/config.js";
 import { toScreen } from "./coords.js";
-import { createPointFilter } from "./filters.js";
+import { createPointFilter, createAngleFilter } from "./filters.js";
 import { pinchMetrics, createPinchState, stepPinch, pinchStrength } from "./recognizers/pinch.js";
 import { palmMetrics, palmPose, createPalmState, stepPalm, resetPalm } from "./recognizers/palm.js";
 
@@ -26,7 +26,7 @@ export function createGestureEngine() {
       let s = per.get(t.id);
       if (!s) {
         s = { pinch: createPinchState(), filter: createPointFilter(CURSOR_FILTER),
-          knuckleFilter: createPointFilter(CURSOR_FILTER),
+          knuckleFilter: createPointFilter(CURSOR_FILTER), angleFilter: createAngleFilter(PALM.ANGLE_FILTER),
           palm: createPalmState(), palmOut: null, pinchEndT: -Infinity,
           x: 0, y: 0, ax: 0, ay: 0, kx: 0, ky: 0, rawX: 0, rawY: 0, spanPx: 0, metrics: null };
         per.set(t.id, s);
@@ -62,16 +62,20 @@ export function createGestureEngine() {
         if (!releasing) { s.ax = pos.x; s.ay = pos.y; }
         s.metrics = m;
         s.palmOut = null;
-        if (s.pinch.pinched || s.pinch.raw || now - s.pinchEndT < PALM.AFTER_PINCH_MS) resetPalm(s.palm);
-        else {
+        if (s.pinch.pinched || s.pinch.raw || now - s.pinchEndT < PALM.AFTER_PINCH_MS) {
+          resetPalm(s.palm);
+          s.angleFilter.reset();
+        } else {
           const c = toScreen(t.lm[9], video, view);
           const k5 = toScreen(t.lm[5], video, view), k17 = toScreen(t.lm[17], video, view);
-          const palm = stepPalm(s.palm, pm, now, c, s.spanPx, Math.atan2(k17.y - k5.y, k17.x - k5.x));
+          const angle = s.angleFilter.filter(Math.atan2(k17.y - k5.y, k17.x - k5.x), now);
+          const palm = stepPalm(s.palm, pm, now, c, s.spanPx, angle);
           s.palmOut = { ...palm, x: c.x, y: c.y };
         }
       } else {
         s.palmOut = null;
         resetPalm(s.palm);
+        s.angleFilter.reset();
       }
       out.push(snapshot(t.id, s, { pinchChanged: change }));
     }

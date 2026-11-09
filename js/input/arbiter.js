@@ -11,8 +11,6 @@ function wrapAngle(a) {
   return a;
 }
 
-function deadzone(a, dz) { return Math.sign(a) * Math.max(0, Math.abs(a) - dz); }
-
 function backlash(out, raw, dz) { return clamp(out, raw - dz, raw + dz); }
 
 function edgeDistance(p, b) {
@@ -248,13 +246,13 @@ export function createArbiter(adapter) {
       const item = palmTarget(p);
       if (!item || !adapter.canRotate(item)) return;
       item.spinPaused = true;
-      r.dial = { itemId: item.id, angle0: p.angle, ry0: item.ry || 0 };
+      r.dial = { itemId: item.id, angle0: p.angle, ry0: item.ry || 0, turn: 0 };
       adapter.emit("palm:dial-start", { hand: h.id, item });
     }
     const item = adapter.findItem(r.dial.itemId);
     if (!item) { r.dial = null; return; }
-    const d = deadzone(wrapAngle(p.angle - r.dial.angle0), PALM.DIAL_DEADZONE);
-    item.ry = r.dial.ry0 + d * PALM.DIAL_GAIN;
+    r.dial.turn = backlash(r.dial.turn, wrapAngle(p.angle - r.dial.angle0), PALM.DIAL_DEADZONE);
+    item.ry = r.dial.ry0 + r.dial.turn * PALM.DIAL_GAIN;
     adapter.onMoved(item);
   }
 

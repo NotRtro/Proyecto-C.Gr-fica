@@ -124,6 +124,7 @@ export const PALM = {
   DIAL_EXT3: 1.4,
   DIAL_GAIN: 1.0,
   DIAL_DEADZONE: 4 * Math.PI / 180,
+  ANGLE_FILTER: { minCutoff: 1.0, beta: 2.0, dCutoff: 1.0 },
   CONFIRM_FRAMES: 3,
   AFTER_PINCH_MS: 500,
   MODEL_MIN: 0.6,
