@@ -29,7 +29,13 @@ export const PINCH_CALIBRATION = {
   MIN_SAMPLES: 10,
 };
 
-export const TAP = { MAX_MS: 300, MAX_PX: 26 };
+export const TAP = {
+  MAX_MS: 300,
+  TRAVEL_SPAN: 0.24,
+  MIN_PX: 12,
+  MAX_PX: 60,
+  MOUSE_PX: 26,
+};
 
 export const HANDS = {
   MATCH_MAX: 0.25,

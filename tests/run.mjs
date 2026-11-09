@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInputPipeline } from "../js/input/pipeline.js";
+import { tapTravel } from "../js/input/arbiter.js";
 import { pinchStrength, pinchGates, pinchKind, pinchFailure } from "../js/input/recognizers/pinch.js";
 import { frameToDetections } from "../js/input/recorder.js";
 import { createPointFilter } from "../js/input/filters.js";
@@ -222,6 +223,32 @@ test("mouse: arrastrar, click = tap, rueda = escala, Shift+rueda = rotar", () =>
   near(s.byId("holo").ry, 0.4, 0.001, "rotacion con Shift+rueda");
   pipe.arbiter.wheel(300, 200, 100, true);
   check(s.byId("card").ry === 0, "una tarjeta no rota");
+});
+
+test("tap: el movimiento permitido es relativo al tamano de la mano (mouse fijo)", () => {
+  near(tapTravel("hand", 110), 26.4, 1e-9, "mano de las pruebas: igual que el valor fijo anterior (26 px)");
+  near(tapTravel("hand", 60), 14.4, 1e-9, "mano lejos (chica en pantalla): menos px");
+  check(tapTravel("hand", 400) === 60 && tapTravel("hand", 20) === 12, "acotado entre 12 y 60 px");
+  check(tapTravel("mouse", 110) === 26 && tapTravel("hand", 0) === 26, "mouse o sin tamano: 26 px");
+});
+
+test("tap: con la mano lejos un pinch que se movio no es tap; con la mano cerca el temblor no lo arruina", () => {
+  const run = (spanPx, movePx) => {
+    const s = makeScene({ card: true });
+    const pipe = createInputPipeline(s.adapter);
+    let t = 1000;
+    const h = (x, pinched, change = null) => ({ ...mouseState(x, 200, pinched, change), id: "h1", source: "hand", spanPx });
+    const step = (state) => pipe.step({ detections: null, video: null, now: (t += 33), view: VIEW, extra: [state] });
+    step(h(250, false));
+    step(h(250, true, "start"));
+    for (let i = 1; i <= 4; i++) step(h(250 + (movePx * i) / 4, true));
+    step(h(250 + movePx, false, "end"));
+    return s.byId("card").taps || 0;
+  };
+  check(run(60, 20) === 0, "mano lejos (60 px) que se movio 20 px: no es tap (antes si)");
+  check(run(60, 10) === 1, "mano lejos quieta: tap");
+  check(run(200, 35) === 1, "mano cerca (200 px) con 35 px de temblor: sigue siendo tap (antes no)");
+  check(run(200, 60) === 0, "mano cerca que se movio 60 px: no es tap");
 });
 
 test("mouse: arrastre rapido en vacio (un solo frame) igual cuenta todo el recorrido para explode", () => {

@@ -13,6 +13,11 @@ function wrapAngle(a) {
 
 function deadzone(a, dz) { return Math.sign(a) * Math.max(0, Math.abs(a) - dz); }
 
+export function tapTravel(source, spanPx) {
+  if (source === "mouse" || !spanPx) return TAP.MOUSE_PX;
+  return clamp(spanPx * TAP.TRAVEL_SPAN, TAP.MIN_PX, TAP.MAX_PX);
+}
+
 export function createArbiter(adapter) {
   const hands = new Map();
   const held = new Map();
@@ -115,6 +120,7 @@ export function createArbiter(adapter) {
   function onPinchStart(h, r, now) {
     r.pinchT = now;
     r.start = { x: h.ax, y: h.ay };
+    r.tapTravel = tapTravel(h.source, h.spanPx);
     adapter.emit("cursor:pinch-start", { hand: h.id, x: h.ax, y: h.ay, source: h.source, spanPx: h.spanPx });
     if (locked) { r.role = "locked"; return; }
     if (adapter.isUiAt && adapter.isUiAt(h.ax, h.ay)) { r.role = "ui"; return; }
@@ -170,7 +176,7 @@ export function createArbiter(adapter) {
 
   function onPinchEnd(h, r, now, allowTap) {
     const quick = now - r.pinchT < TAP.MAX_MS;
-    const still = dist(r.start, { x: h.ax, y: h.ay }) < TAP.MAX_PX;
+    const still = dist(r.start, { x: h.ax, y: h.ay }) < r.tapTravel;
     const tappable = r.role !== "two-hand" && r.role !== "explode" && r.role !== "piece";
     if (allowTap && tappable && quick && still) {
       const item = locked || r.role === "ui" ? null : adapter.hitTest(r.start.x, r.start.y);
