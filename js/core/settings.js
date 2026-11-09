@@ -11,6 +11,7 @@ const DEFAULTS = {
   palmTurn: "perilla",
   tutorialDone: false,
   dwellSelect: false,
+  dwellTime: "800",
   clickSound: false,
   orbPos: null,
   calibration: null,
@@ -27,6 +28,7 @@ const FACTORY = {
 };
 
 const SENSITIVITY_OFFSET = { low: -0.07, normal: 0, high: 0.07 };
+const DWELL_TIMES = { 800: 800, 1000: 1000, 1200: 1200 };
 
 function load() {
   try {
@@ -52,6 +54,7 @@ function apply() {
   UI_TARGET.HYSTERESIS_PX = c.hysteresisPx;
   UI_PRESS.TRAVEL_MIN = c.travelMinPx;
   CURSOR_FILTER.minCutoff = c.minCutoff;
+  UI_TARGET.DWELL_MS = DWELL_TIMES[settings.dwellTime] || DWELL_TIMES[DEFAULTS.dwellTime];
   PALM.TURN = settings.palmTurn === "volante" ? "volante" : "perilla";
 }
 apply();

@@ -15,7 +15,7 @@ import { createGestureEngine } from "../js/input/gestures.js";
 import { hand } from "./synthetic.mjs";
 import { setSetting } from "../js/core/settings.js";
 import { samplesFromRecording } from "./calibrate.mjs";
-import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, sweepMenu } from "./menuBench.mjs";
+import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, trialDwell, sweepMenu } from "./menuBench.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
 import {
@@ -977,6 +977,50 @@ test("orbe: 0 confusiones entre clic y arrastre", () => {
   const drags = rate(25, (s) => trialClickOrDrag(s, BENCH_TREMOR, true));
   check(clicks.ok === 25, "clics tomados como otra cosa: semillas " + failSeeds(clicks));
   check(drags.ok === 25, "arrastres tomados como otra cosa: semillas " + failSeeds(drags));
+});
+
+console.log("permanencia en el menu:");
+
+const DWELL_TREMOR = 8;
+
+test("permanencia: selecciona la fila apuntada con la mano lejos, normal y cerca", () => {
+  for (const span of [60, 110, 200, 260]) {
+    const r = rate(20, (s) => trialDwell(s, DWELL_TREMOR * span / 110, { span }));
+    check(r.rate >= 0.9, "mano de " + span + " px: " + r.ok + "/20, fallan semillas " + failSeeds(r));
+  }
+});
+
+test("permanencia: pasar la mano 2 min sin detenerse no activa nada, con cada tiempo de Ajustes", () => {
+  try {
+    for (const time of ["800", "1000", "1200"]) {
+      setSetting("dwellTime", time);
+      const fired = sweepMenu(11, DWELL_TREMOR, 120000, { dwell: true });
+      check(fired.length === 0, time + " ms: se activo " + fired.map((f) => f.id).join(","));
+    }
+  } finally {
+    setSetting("dwellTime", "800");
+  }
+});
+
+test("permanencia: por debajo de 0,7 s una mano que pasa ya activa opciones", () => {
+  const keep = UI_TARGET.DWELL_MS;
+  UI_TARGET.DWELL_MS = 600;
+  try {
+    check(sweepMenu(11, DWELL_TREMOR, 120000, { dwell: true }).length > 0, "con 0,6 s deberia activarse al pasar");
+  } finally {
+    UI_TARGET.DWELL_MS = keep;
+  }
+});
+
+test("permanencia: el tiempo elegido en Ajustes se aplica y un valor raro vuelve a 0,8 s", () => {
+  try {
+    setSetting("dwellTime", "1200");
+    check(UI_TARGET.DWELL_MS === 1200, "1,2 s aplicado: " + UI_TARGET.DWELL_MS);
+    setSetting("dwellTime", "300");
+    check(UI_TARGET.DWELL_MS === 800, "valor no permitido: " + UI_TARGET.DWELL_MS);
+  } finally {
+    setSetting("dwellTime", "800");
+  }
 });
 
 console.log("\n" + passed + " ok, " + failed + " fallas");

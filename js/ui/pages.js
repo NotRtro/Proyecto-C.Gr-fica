@@ -186,7 +186,8 @@ registerMenuPage("settings", {
   build: (ui) => [
     ui.section("Selección en el menú"),
     ui.toggle("dwellSelect", "Seleccionar dejando el cursor quieto"),
-    ui.note("Con esto activado, dejar la mano quieta 0.8 s sobre una opción la pulsa, sin pinch (Salir y Reiniciar siguen pidiendo mantener)."),
+    ...(settings.dwellSelect ? [ui.choice("dwellTime", [["800", "0,8 s"], ["1000", "1 s"], ["1200", "1,2 s"]])] : []),
+    ui.note("Con esto activado, dejar la mano quieta sobre una opción la pulsa, sin pinch (Salir y Reiniciar siguen pidiendo mantener). Si se activan opciones sin querer, elige más tiempo."),
     ui.toggle("clickSound", "Sonido al pulsar"),
     ui.section("Calibración de la mano"),
     ui.button({ label: "Calibrar mis manos", action: "calib:open",

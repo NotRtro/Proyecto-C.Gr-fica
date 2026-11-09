@@ -49,16 +49,16 @@ const PINCH_POINT = [(-0.35 - 0.3) / 2, (-1.05 - 1.1) / 2];
 const POSE_GESTURE = { palm: "Open_Palm", fist: "Closed_Fist", fist_tight: "Closed_Fist", fist_forward: "Closed_Fist" };
 const SPAN_M = 0.09;
 
-export function hand(pose, px, py, label = "Right", { roll = 0, model = false, gesture = null } = {}) {
+export function hand(pose, px, py, label = "Right", { roll = 0, model = false, gesture = null, span = SPAN_PX } = {}) {
   const pts = { ...BASE, ...POSES[pose] };
-  const wx = px - PINCH_POINT[0] * SPAN_PX, wy = py - PINCH_POINT[1] * SPAN_PX;
+  const wx = px - PINCH_POINT[0] * span, wy = py - PINCH_POINT[1] * span;
   const c = Math.cos(roll * Math.PI / 180), s = Math.sin(roll * Math.PI / 180);
   const lm = [], wl = [];
   for (let i = 0; i < 21; i++) {
     const [ux0, uy0, uz = 0] = pts[i] || [0, -0.5];
     const ux = ux0 * c - uy0 * s, uy = ux0 * s + uy0 * c;
-    const sx = wx + ux * SPAN_PX, sy = wy + uy * SPAN_PX;
-    lm.push([+(1 - sx / VIDEO.w).toFixed(5), +(sy / VIDEO.h).toFixed(5), +(uz * SPAN_PX / VIDEO.w).toFixed(5)]);
+    const sx = wx + ux * span, sy = wy + uy * span;
+    lm.push([+(1 - sx / VIDEO.w).toFixed(5), +(sy / VIDEO.h).toFixed(5), +(uz * span / VIDEO.w).toFixed(5)]);
     wl.push([+(-ux * SPAN_M).toFixed(5), +(uy * SPAN_M).toFixed(5), +(uz * SPAN_M).toFixed(5)]);
   }
   if (!model) return { label, lm };

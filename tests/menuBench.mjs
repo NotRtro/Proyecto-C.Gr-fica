@@ -6,6 +6,7 @@ import { hand, VIDEO, FRAME_MS } from "./synthetic.mjs";
 
 const VIEW = { w: VIDEO.w, h: VIDEO.h };
 const CLOSE_FRAMES = 4;
+const SWEEP_MIN_STEP = 80;
 
 const box = (l, t, r, b) => ({ left: l, top: t, right: r, bottom: b });
 const inBox = (r, x, y) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
@@ -57,7 +58,7 @@ function createMenu() {
   const log = [];
   const out = {
     fire(btn) {
-      log.push({ e: "fire", id: btn.id });
+      log.push({ e: "fire", id: btn.id, t: state.now });
       if (btn === orb) state.open = !state.open;
     },
     clear() {}, press() {}, lift() {}, progress() {}, move() {},
@@ -72,14 +73,14 @@ function blend(a, b, f) {
   return { label: a.label, lm: a.lm.map((p, i) => p.map((v, k) => v + (b.lm[i][k] - v) * f)) };
 }
 
-const OPEN_OFFSET = (() => {
-  const h = hand("open", 0, 0);
+function openOffset(span) {
+  const h = hand("open", 0, 0, "Right", { span });
   const px = (p) => ({ x: (1 - p[0]) * VIDEO.w, y: p[1] * VIDEO.h });
   const a = px(h.lm[4]), b = px(h.lm[8]);
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-})();
+}
 
-export function createBench({ seed = 1, tremor = 3, dwell = false, startOpen = false } = {}) {
+export function createBench({ seed = 1, tremor = 3, dwell = false, startOpen = false, span = 110 } = {}) {
   const rand = rng(seed);
   const menu = createMenu();
   menu.state.dwell = dwell;
@@ -103,13 +104,15 @@ export function createBench({ seed = 1, tremor = 3, dwell = false, startOpen = f
   let pose = "open";
   let wx = 900, wy = 400;
   let phase = rand() * Math.PI * 2;
+  const offset = openOffset(span);
 
   function frame() {
     phase += 0.35;
     const nx = (rand() * 2 - 1) * tremor + Math.sin(phase) * tremor * 0.5;
     const ny = (rand() * 2 - 1) * tremor + Math.cos(phase * 0.8) * tremor * 0.5;
-    const from = hand(pose, wx + nx, wy + ny);
-    const h = closed > 0 ? blend(from, hand("pinch", wx + nx, wy + ny), closed / CLOSE_FRAMES) : from;
+    const from = hand(pose, wx + nx, wy + ny, "Right", { span });
+    const h = closed > 0 ? blend(from, hand("pinch", wx + nx, wy + ny, "Right", { span }), closed / CLOSE_FRAMES) : from;
+    menu.state.now = t;
     let hands = pipe.step({ detections: frameToDetections({ hands: [h] }), video, now: t, view: VIEW });
     core.update(hands, t);
     hands = pipe.step({ detections: null, video, now: t + 16, view: VIEW });
@@ -117,7 +120,7 @@ export function createBench({ seed = 1, tremor = 3, dwell = false, startOpen = f
     t += FRAME_MS;
   }
 
-  const aimAt = (x, y) => ({ x: x - OPEN_OFFSET.x, y: y - OPEN_OFFSET.y });
+  const aimAt = (x, y) => ({ x: x - offset.x, y: y - offset.y });
 
   function moveTo(x, y, ms) {
     const goal = aimAt(x, y);
@@ -222,15 +225,36 @@ export function trialClickOrDrag(seed, tremor, wantDrag) {
   return { ok: wantDrag ? dropped && !fired : fired && !dropped, log: b.menu.log };
 }
 
-export function sweepMenu(seed, tremor, ms, { dwell = false } = {}) {
-  const b = createBench({ seed, tremor, dwell, startOpen: true });
+export function trialDwell(seed, tremor, { span = 110, holdMs = 1500 } = {}) {
+  const b = createBench({ seed, tremor, span, dwell: true, startOpen: true });
+  const target = b.menu.folders[Math.floor(b.rand() * b.menu.folders.length)];
+  b.place(pick(b.rand, 250, 900), pick(b.rand, 150, 600));
+  b.wait(200);
+  const a = aimInside(b, target.r, 0.6, 0.5);
+  b.moveTo(a.x, a.y, pick(b.rand, 450, 800));
+  const arrived = b.menu.state.now;
+  b.wait(holdMs);
+  const fires = b.menu.log.filter((l) => l.e === "fire");
+  const ok = fires.length === 1 && fires[0].id === target.id;
+  return { ok, ms: ok ? fires[0].t - arrived : null, target: target.id, log: b.menu.log };
+}
+
+export function sweepMenu(seed, tremor, ms, { dwell = false, span = 110 } = {}) {
+  const b = createBench({ seed, tremor, dwell, span, startOpen: true });
   const area = { left: 20, top: 180, right: 620, bottom: 680 };
-  b.place(400, 400);
+  let x = 400, y = 400;
+  b.place(x, y);
   let elapsed = 0;
   while (elapsed < ms) {
     if (b.rand() < 0.3) b.setPose(b.rand() < 0.5 ? "relaxed" : "open");
     const d = pick(b.rand, 250, 700);
-    b.moveTo(pick(b.rand, area.left, area.right), pick(b.rand, area.top, area.bottom), d);
+    let nx, ny;
+    do {
+      nx = pick(b.rand, area.left, area.right);
+      ny = pick(b.rand, area.top, area.bottom);
+    } while (Math.hypot(nx - x, ny - y) < SWEEP_MIN_STEP);
+    x = nx; y = ny;
+    b.moveTo(x, y, d);
     const pause = dwell ? pick(b.rand, 0, 300) : pick(b.rand, 0, 1200);
     b.wait(pause);
     elapsed += d + pause;
@@ -261,5 +285,19 @@ if (process.argv[1] && process.argv[1].endsWith("menuBench.mjs")) {
     console.log("temblor " + tremor + " px | abrir " + open.ok + "/" + N + " | fila " + row.ok + "/" + N
       + " | clic " + click.ok + "/" + N + " | arrastre " + drag.ok + "/" + N
       + " | activaciones en 2 min: " + sweep + " (dwell: " + sweepDwell + ")");
+  }
+  console.log("permanencia (temblor proporcional al tamano de la mano):");
+  for (const span of [60, 110, 200, 260]) {
+    for (const base of [4, 8]) {
+      const tremor = base * span / 110;
+      const times = [];
+      for (let s = 1; s <= N; s++) { const r = trialDwell(s, tremor, { span }); if (r.ok) times.push(r.ms); }
+      times.sort((x, y) => x - y);
+      let passing = 0;
+      for (let k = 0; k < 3; k++) passing += sweepMenu(100 + k, tremor, 120000, { dwell: true, span }).length;
+      console.log("mano " + span + " px, temblor " + tremor.toFixed(1) + " px | selecciona " + times.length + "/" + N
+        + " | tarda " + (times.length ? times[times.length >> 1] : "-") + " ms (mediana)"
+        + " | sin querer en 6 min: " + passing);
+    }
   }
 }
