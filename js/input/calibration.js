@@ -1,4 +1,15 @@
-import { CURSOR_CALIBRATION } from "../core/config.js";
+import { CURSOR_CALIBRATION, PINCH_CALIBRATION } from "../core/config.js";
+import { pinchGates, pinchKind } from "./recognizers/pinch.js";
+
+export const PROTOCOL = [
+  { phase: "open", ms: 3000 },
+  { phase: "pinch", ms: 2000 },
+  { phase: "taps", ms: 5000 },
+  { phase: "fist", ms: 2000 },
+  { phase: "relaxed", ms: 2000 },
+];
+
+const IMPOSTOR_PHASES = new Set(["fist", "relaxed"]);
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const median = (a) => {
@@ -7,6 +18,12 @@ const median = (a) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 const mean = (a) => a.reduce((p, q) => p + q, 0) / a.length;
+const percentile = (a, q) => {
+  if (!a.length) return NaN;
+  const s = [...a].sort((p, r) => p - r);
+  return s[Math.round(q * (s.length - 1))];
+};
+const share = (list, fn) => (list.length ? list.filter(fn).length / list.length : 0);
 
 export function otsuSplit(values) {
   const s = [...values].sort((a, b) => a - b);
@@ -68,9 +85,48 @@ export function minCutoffFor(rawJitterPx, frameMs, targetPx = CURSOR_CALIBRATION
   return +clamp(fc, lo, hi).toFixed(2);
 }
 
+function fitCut(pinch, impostors, key, [lo, hi], drop, current) {
+  const pLow = percentile(pinch.map((s) => s[key]), 0.1);
+  const iHigh = impostors.length ? percentile(impostors.map((s) => s[key]), 0.9) : -Infinity;
+  if (!(pLow - iHigh >= PINCH_CALIBRATION.MIN_GAP)) return null;
+  const enter = Number.isFinite(iHigh)
+    ? clamp((pLow + iHigh) / 2, lo, hi)
+    : clamp(Math.min(current, pLow - PINCH_CALIBRATION.MIN_GAP), lo, hi);
+  const hold = Number.isFinite(iHigh) ? Math.max(enter - drop, (iHigh + enter) / 2) : enter - drop;
+  return { enter: +enter.toFixed(3), hold: +Math.min(hold, enter).toFixed(3) };
+}
+
+export function fitPinchGates(pinch, impostors, base) {
+  const accepts = (g) => (s) => pinchKind(false, s, g) !== null;
+  const score = (g) => ({ detect: share(pinch, accepts(g)), falseRate: share(impostors, accepts(g)) });
+  const before = score(base);
+  if (before.detect >= PINCH_CALIBRATION.GOOD_DETECT && before.falseRate <= PINCH_CALIBRATION.MAX_FALSE) {
+    return { gates: base, ...before, changed: [] };
+  }
+  const g = { ...base };
+  const changed = [];
+  const apply = (cut, enterKey, holdKey) => {
+    if (!cut) return;
+    g[enterKey] = cut.enter; g[holdKey] = cut.hold;
+    changed.push(enterKey);
+  };
+  const okImpostors = impostors.filter((s) => s.ratio < base.ratioEnter);
+  apply(fitCut(pinch, okImpostors, "backMean", PINCH_CALIBRATION.BACK_RANGE, base.backEnter - base.backHold, base.backEnter),
+    "backEnter", "backHold");
+  apply(fitCut(pinch, okImpostors, "arch", PINCH_CALIBRATION.ARCH_RANGE, base.archEnter - base.archHold, base.archEnter),
+    "archEnter", "archHold");
+  const closedImpostors = impostors.filter((s) => s.ratio < base.ratioEnter * base.closedEnterK);
+  apply(fitCut(pinch, closedImpostors, "f8", PINCH_CALIBRATION.F8_RANGE, base.f8Enter - base.f8Hold, base.f8Enter),
+    "f8Enter", "f8Hold");
+  const after = score(g);
+  const better = after.detect > before.detect && after.falseRate <= Math.max(before.falseRate, PINCH_CALIBRATION.MAX_FALSE);
+  return better ? { gates: g, ...after, changed } : { gates: base, ...before, changed: [] };
+}
+
 export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
   const warnings = [];
-  const valid = samples.filter((s) => Number.isFinite(s.ratio) && Number.isFinite(s.x));
+  const impostors = samples.filter((s) => IMPOSTOR_PHASES.has(s.phase) && Number.isFinite(s.ratio));
+  const valid = samples.filter((s) => !IMPOSTOR_PHASES.has(s.phase) && Number.isFinite(s.ratio) && Number.isFinite(s.x));
   if (valid.length < 30) return { ok: false, reason: "Muy pocas muestras de la mano (" + valid.length + ").", warnings };
 
   const split = otsuSplit(valid.map((s) => s.ratio));
@@ -116,12 +172,37 @@ export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
 
   const ratioEnter = clamp(ratioPinch + 0.45 * (ratioOpen - ratioPinch), 0.18, 0.5);
   const ratioHold = clamp(ratioPinch + 0.6 * (ratioOpen - ratioPinch), ratioEnter + 0.06, 0.62);
+
+  const hasShape = (s) => Number.isFinite(s.arch) && Number.isFinite(s.backMean) && Number.isFinite(s.f8);
+  const sustained = pinch.filter((s) => s.phase === "pinch");
+  const shapePinch = (sustained.length >= 10 ? sustained : pinch).filter(hasShape);
+  let fit = null;
+  if (shapePinch.length >= 10) {
+    const base = { ...pinchGates(), ratioEnter, ratioHold };
+    fit = fitPinchGates(shapePinch, impostors.filter(hasShape), base);
+    if (fit.detect < PINCH_CALIBRATION.WARN_DETECT) {
+      warnings.push("Tu pinch se reconoce solo " + Math.round(fit.detect * 100) + " % de las veces: junta bien las puntas y estira o recoge del todo los otros tres dedos.");
+    }
+    if (fit.falseRate > PINCH_CALIBRATION.MAX_FALSE) {
+      warnings.push("El puño o la mano relajada se toman por pinch " + Math.round(fit.falseRate * 100) + " % de las veces: al hacer pinch, separa más los otros dedos.");
+    }
+  }
+  const g = fit && fit.gates;
+
   return {
     ok: true, warnings,
     jitterPx, rawJitterPx, frameMs, ratioOpen, ratioPinch, jumpPx, spanPx, transitions: jumps.length,
+    pinchDetect: fit ? fit.detect : NaN,
+    impostorRate: fit && impostors.length ? fit.falseRate : NaN,
+    gatesChanged: fit ? fit.changed : [],
     suggest: {
       ratioEnter: +ratioEnter.toFixed(3),
       ratioHold: +ratioHold.toFixed(3),
+      ...(g ? {
+        archEnter: g.archEnter, archHold: g.archHold,
+        backEnter: g.backEnter, backHold: g.backHold,
+        f8Enter: g.f8Enter, f8Hold: g.f8Hold,
+      } : {}),
       hysteresisPx: clamp(Math.round(3 * jitterPx), 6, 20),
       travelMinPx: clamp(Math.round(4 * jitterPx), 30, 60),
       ...(Number.isFinite(rawJitterPx) ? { minCutoff: minCutoffFor(rawJitterPx, frameMs) } : {}),

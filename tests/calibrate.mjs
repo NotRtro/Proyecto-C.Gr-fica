@@ -13,7 +13,10 @@ export function samplesFromRecording(rec) {
   for (const f of rec.frames) {
     const hands = engine.update(tracker.update(frameToDetections(f), f.t), video, f.t, view);
     const h = hands.find((s) => s.present && s.metrics);
-    if (h) samples.push({ t: f.t, x: h.ax, y: h.ay, rx: h.rawX, ry: h.rawY, ratio: h.metrics.ratio, span: h.spanPx });
+    if (!h) continue;
+    const m = h.metrics;
+    samples.push({ t: f.t, phase: f.phase, x: h.ax, y: h.ay, rx: h.rawX, ry: h.rawY,
+      ratio: m.ratio, arch: m.arch, backMean: m.backMean, f8: m.f8, span: h.spanPx });
   }
   return samples;
 }
@@ -29,12 +32,16 @@ function main(file) {
   console.log("  ratio en pinch:              " + r.ratioPinch.toFixed(3));
   console.log("  salto al juntar los dedos:   " + r.jumpPx.toFixed(1) + " px (" + r.transitions + " pinch)");
   console.log("  tamano de la mano:           " + r.spanPx.toFixed(0) + " px");
+  console.log("  pinch reconocido:            " + Math.round(r.pinchDetect * 100) + " %");
+  if (Number.isFinite(r.impostorRate)) console.log("  impostoras tomadas por pinch: " + Math.round(r.impostorRate * 100) + " %");
   for (const w of r.warnings) console.log("  ! " + w);
   console.log("\nUmbrales sugeridos (el asistente de la app los guarda solo; a mano van en js/core/config.js):");
   console.log("  PINCH.RATIO_ENTER = " + r.suggest.ratioEnter + ", PINCH.RATIO_HOLD = " + r.suggest.ratioHold);
   console.log("  UI_TARGET.HYSTERESIS_PX = " + r.suggest.hysteresisPx);
   console.log("  UI_PRESS.TRAVEL_MIN = " + r.suggest.travelMinPx);
   console.log("  CURSOR_FILTER.minCutoff = " + r.suggest.minCutoff);
+  console.log("  PINCH.ARCH_ENTER = " + r.suggest.archEnter + ", PINCH.BACKMEAN_ENTER = " + r.suggest.backEnter
+    + ", PINCH_CLOSED.F8_ENTER = " + r.suggest.f8Enter + (r.gatesChanged.length ? " (ajustados)" : " (de fabrica)"));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

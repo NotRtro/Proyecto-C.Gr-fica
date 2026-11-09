@@ -1,14 +1,27 @@
 import { registerAction } from "./actions.js";
 import { toast } from "./feedback.js";
 import { setSetting } from "../core/settings.js";
-import { analyzeHand } from "../input/calibration.js";
+import { analyzeHand, PROTOCOL } from "../input/calibration.js";
+import { pinchFailure } from "../input/recognizers/pinch.js";
 import { input } from "../stage/interaction.js";
 
-const STEPS = [
-  { title: "Mano abierta y quieta", hint: "Muestra la palma a la cámara y no la muevas.", ms: 3000 },
-  { title: "Pinch sostenido", hint: "Junta el pulgar y el índice hasta que se toquen, y mantenlos así.", ms: 2000 },
-  { title: "Pinch y soltar, 4 veces", hint: "Despacio y sin mover la mano de lugar.", ms: 5000 },
-];
+const TEXT = {
+  open: { title: "Mano abierta y quieta", hint: "Muestra la palma a la cámara y no la muevas." },
+  pinch: { title: "Pinch sostenido", hint: "Junta el pulgar y el índice hasta que se toquen, y mantenlos así." },
+  taps: { title: "Pinch y soltar, 4 veces", hint: "Despacio y sin mover la mano de lugar." },
+  fist: { title: "Puño cerrado", hint: "Cierra la mano en un puño, con el pulgar por fuera." },
+  relaxed: { title: "Mano relajada", hint: "Deja la mano suelta, con los dedos un poco doblados, sin hacer pinch." },
+};
+
+const FAILURE = {
+  gap: "Pinch no detectado: junta más el pulgar y el índice.",
+  tips: "Pinch no detectado: que las puntas del pulgar y el índice se toquen.",
+  shape: "Pinch no detectado: estira los otros tres dedos, o recógelos del todo sin meter el índice.",
+};
+
+const STEPS = PROTOCOL.map((p) => ({ ...p, ...TEXT[p.phase] }));
+const PINCH_PHASES = new Set(["pinch", "taps"]);
+const IMPOSTOR_PHASES = new Set(["fist", "relaxed"]);
 
 let card = null;
 let step = -1;
@@ -16,6 +29,7 @@ let elapsed = 0;
 let lastT = null;
 let samples = [];
 let result = null;
+let view = null;
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -31,27 +45,46 @@ function button(label, action, primary) {
   return b;
 }
 
-let view = null;
-
 function buildStep() {
   const s = STEPS[step];
   const hint = el("div", "tut-hint", s.hint);
+  const live = el("div", "calib-live");
   const bar = el("div", "calib-bar");
   const fill = el("div", "calib-fill");
   bar.appendChild(fill);
   const row = el("div", "calib-actions");
   row.appendChild(button("Cancelar", "calib:cancel"));
   card.replaceChildren(el("div", "tut-step", "Calibración · paso " + (step + 1) + " de " + STEPS.length),
-    el("div", "tut-title", s.title), hint, bar, row);
-  view = { hint, fill };
+    el("div", "tut-title", s.title), hint, live, bar, row);
+  view = { hint, live, fill };
 }
 
-function updateStep(handVisible) {
+function liveStatus(s, h) {
+  if (!h) return { text: "", kind: "" };
+  if (PINCH_PHASES.has(s.phase)) {
+    if (h.pinched) return { text: "Pinch detectado ✓", kind: "good" };
+    if (s.phase === "taps") return { text: "", kind: "" };
+    return { text: FAILURE[pinchFailure(h.metrics)] || "", kind: "bad" };
+  }
+  if (IMPOSTOR_PHASES.has(s.phase)) {
+    return h.pinched
+      ? { text: "Esta pose se está tomando por pinch", kind: "bad" }
+      : { text: "Bien: no es pinch ✓", kind: "good" };
+  }
+  return { text: "", kind: "" };
+}
+
+function updateStep(h) {
   const s = STEPS[step];
   view.fill.style.width = Math.min(100, (elapsed / s.ms) * 100).toFixed(1) + "%";
-  const text = handVisible ? s.hint : "No veo tu mano: ponla frente a la cámara.";
+  const text = h ? s.hint : "No veo tu mano: ponla frente a la cámara.";
   if (view.hint.textContent !== text) view.hint.textContent = text;
+  const live = liveStatus(s, h);
+  if (view.live.textContent !== live.text) view.live.textContent = live.text;
+  view.live.className = "calib-live" + (live.kind ? " " + live.kind : "");
 }
+
+const percent = (v) => (Number.isFinite(v) ? Math.round(v * 100) + " %" : "—");
 
 function renderResult() {
   const r = result;
@@ -64,6 +97,9 @@ function renderResult() {
     return;
   }
   const lines = [
+    "Pinch reconocido: " + percent(r.pinchDetect),
+    "Puño o mano relajada tomados por pinch: " + percent(r.impostorRate),
+    "Forma del pinch: " + (r.gatesChanged.length ? "ajustada a tu mano" : "valores de fábrica"),
     "Temblor de la mano: " + (Number.isFinite(r.rawJitterPx) ? r.rawJitterPx.toFixed(1) + " px" : "—"),
     "Temblor del cursor: " + r.jitterPx.toFixed(1) + " px",
     "Suavizado del cursor: " + (Number.isFinite(r.suggest.minCutoff) ? r.suggest.minCutoff.toFixed(2) + " Hz (fábrica 1.20)" : "—"),
@@ -93,7 +129,7 @@ export function startCalibration() {
   step = 0; elapsed = 0; lastT = null; samples = []; result = null;
   input.arbiter.setLocked(true);
   buildStep();
-  updateStep(false);
+  updateStep(null);
 }
 
 export function updateCalibration(hands, now) {
@@ -102,7 +138,9 @@ export function updateCalibration(hands, now) {
   lastT = now;
   const h = hands.find((s) => s.source === "hand" && s.present && s.metrics);
   if (h) {
-    samples.push({ t: now, x: h.ax, y: h.ay, rx: h.rawX, ry: h.rawY, ratio: h.metrics.ratio, span: h.spanPx });
+    const m = h.metrics;
+    samples.push({ t: now, phase: STEPS[step].phase, x: h.ax, y: h.ay, rx: h.rawX, ry: h.rawY,
+      ratio: m.ratio, arch: m.arch, backMean: m.backMean, f8: m.f8, span: h.spanPx });
     elapsed += dt;
   }
   if (elapsed >= STEPS[step].ms) {
@@ -115,7 +153,7 @@ export function updateCalibration(hands, now) {
     }
     buildStep();
   }
-  updateStep(!!h);
+  updateStep(h || null);
 }
 
 export function calibrationActive() { return !!card; }

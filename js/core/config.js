@@ -15,6 +15,16 @@ export const PINCH_CLOSED = {
   F8_ENTER: 0.9, F8_HOLD: 0.8,
 };
 
+export const PINCH_CALIBRATION = {
+  GOOD_DETECT: 0.9,
+  WARN_DETECT: 0.8,
+  MAX_FALSE: 0.05,
+  MIN_GAP: 0.04,
+  ARCH_RANGE: [0.05, 0.4],
+  BACK_RANGE: [1.0, 1.6],
+  F8_RANGE: [0.75, 1.2],
+};
+
 export const TAP = { MAX_MS: 300, MAX_PX: 26 };
 
 export const HANDS = {

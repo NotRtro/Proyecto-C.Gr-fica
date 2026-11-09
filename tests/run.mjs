@@ -2,13 +2,13 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInputPipeline } from "../js/input/pipeline.js";
-import { pinchStrength } from "../js/input/recognizers/pinch.js";
+import { pinchStrength, pinchGates, pinchKind, pinchFailure } from "../js/input/recognizers/pinch.js";
 import { frameToDetections } from "../js/input/recorder.js";
 import { createPointFilter } from "../js/input/filters.js";
 import { CURSOR_FILTER, PINCH, UI_TARGET, UI_PRESS } from "../js/core/config.js";
 import { createPress, stepPress, endPress, clickTravel } from "../js/ui/press.js";
 import { stickyTarget, nearestIn, pickIntent, magnetPoint, createDwell, stepDwell } from "../js/ui/targeting.js";
-import { analyzeHand, minCutoffFor } from "../js/input/calibration.js";
+import { analyzeHand, minCutoffFor, fitPinchGates } from "../js/input/calibration.js";
 import { createHandTracker } from "../js/input/hands.js";
 import { createGestureEngine } from "../js/input/gestures.js";
 import { hand } from "./synthetic.mjs";
@@ -544,9 +544,78 @@ test("seguimiento: si la mano reaparece tras perderse, el cursor no vuela desde 
   near(h.x, h.rawX, 1e-9, "el cursor parte de donde esta la mano");
 });
 
+const OK_PINCH = { ratio: 0.07, backMean: 1.8, arch: 0.7, f8: 1.1 };
+const FIST = { ratio: 0.28, backMean: 0.88, arch: 0.13, f8: 0.75 };
+const RELAXED = { ratio: 0.47, backMean: 1.38, arch: 0.13, f8: 1.25 };
+const spread = (m, n, k) => Array.from({ length: n }, (_, i) => {
+  const d = ((i % 5) - 2) * k;
+  return { ...m, ratio: m.ratio + d * 0.1, backMean: m.backMean + d, arch: m.arch + d, f8: m.f8 + d };
+});
+
+test("calibracion del pinch: una mano promedio deja la forma de fabrica (no se arregla lo que anda)", () => {
+  const r = analyzeHand(samplesFromRecording(loadRec("calibration")));
+  check(r.ok, r.reason);
+  near(r.pinchDetect, 1, 1e-9, "pinch reconocido");
+  near(r.impostorRate, 0, 1e-9, "punos y mano relajada tomados por pinch");
+  check(r.gatesChanged.length === 0, "forma sin cambios: " + r.gatesChanged.join());
+  check(r.suggest.backEnter === 1.3 && r.suggest.f8Enter === 0.9, "valores de fabrica en la sugerencia");
+});
+
+test("calibracion del pinch: con el indice muy doblado relaja el corte del indice y el puno sigue rechazado", () => {
+  const pinch = spread({ ratio: 0.07, backMean: 1.0, arch: -0.05, f8: 0.84 }, 40, 0.005);
+  const impostors = [...spread(FIST, 30, 0.005), ...spread(RELAXED, 30, 0.005)];
+  const base = pinchGates();
+  check(pinch.every((m) => !pinchKind(false, m, base)), "con fabrica este pinch no se reconoce");
+  const fit = fitPinchGates(pinch, impostors, base);
+  check(fit.changed.includes("f8Enter"), "ajusta el corte del indice: " + fit.changed.join());
+  check(fit.gates.f8Enter < 0.84, "el corte queda por debajo de este pinch: " + fit.gates.f8Enter);
+  near(fit.detect, 1, 1e-9, "ahora se reconoce");
+  near(fit.falseRate, 0, 1e-9, "y ninguna impostora pasa");
+});
+
+test("calibracion del pinch: si el puno toca la punta del indice, corta a mitad del hueco entre ambos", () => {
+  const pinch = spread({ ratio: 0.07, backMean: 1.0, arch: -0.05, f8: 0.88 }, 40, 0.004);
+  const tightFist = spread({ ratio: 0.07, backMean: 0.88, arch: 0.0, f8: 0.76 }, 30, 0.004);
+  const fit = fitPinchGates(pinch, tightFist, pinchGates());
+  check(fit.gates.f8Enter > 0.76 && fit.gates.f8Enter < 0.88, "corte entre el puno y el pinch: " + fit.gates.f8Enter);
+  near(fit.falseRate, 0, 1e-9, "el puno apretado sigue rechazado");
+  near(fit.detect, 1, 1e-9, "el pinch pasa");
+});
+
+test("calibracion del pinch: si la impostora es igual al pinch no toca nada y avisa", () => {
+  const pinch = spread({ ratio: 0.07, backMean: 0.9, arch: 0.1, f8: 0.78 }, 40, 0.004);
+  const fit = fitPinchGates(pinch, spread({ ratio: 0.07, backMean: 0.9, arch: 0.1, f8: 0.78 }, 30, 0.004), pinchGates());
+  check(fit.changed.length === 0, "sin cambios: " + fit.changed.join());
+  check(fit.detect < 0.5, "y el pinch sigue sin reconocerse: " + fit.detect);
+});
+
+test("diagnostico del pinch: dice que condicion falla", () => {
+  check(pinchFailure(OK_PINCH) === null, "pinch correcto");
+  check(pinchFailure({ ...OK_PINCH, ratio: 0.5 }) === "gap", "dedos separados");
+  check(pinchFailure({ ratio: 0.3, backMean: 0.9, arch: -0.2, f8: 1.1 }) === "tips", "cerrado sin tocar las puntas");
+  check(pinchFailure({ ratio: 0.07, backMean: 1.0, arch: -0.05, f8: 0.8 }) === "shape", "forma: ni estirados ni recogidos");
+});
+
+test("pinch en 3D: con los puntos en metros el pinch agarra y arrastra igual", () => {
+  const s = makeScene();
+  const pipe = createInputPipeline(s.adapter);
+  const video = { videoWidth: 1280, videoHeight: 720 };
+  let t = 1000;
+  const step = (pose, x) => pipe.step({ detections: frameToDetections({ hands: [hand(pose, x, 300, "Right", { model: true })] }), video, now: (t += 33), view: VIEW });
+  for (let i = 0; i < 8; i++) step("open", 600);
+  for (let i = 0; i < 30; i++) step("pinch", 600 + (200 * i) / 29);
+  for (let i = 0; i < 10; i++) step("pinch", 800);
+  for (let i = 0; i < 10; i++) step("open", 800);
+  check(s.count("grab:start") === 1 && s.count("grab:end") === 1, "un agarre y un soltar");
+  near(s.byId("holo").x, 840, 12, "x final del reactor");
+});
+
 test("calibracion guardada: se aplica sobre los umbrales y la sensibilidad es relativa", () => {
-  setSetting("calibration", { ratioEnter: 0.3, ratioHold: 0.4, hysteresisPx: 14, travelMinPx: 40, minCutoff: 0.8 });
+  setSetting("calibration", { ratioEnter: 0.3, ratioHold: 0.4, hysteresisPx: 14, travelMinPx: 40, minCutoff: 0.8,
+    archEnter: 0.1, archHold: 0.05, backEnter: 1.1, backHold: 1.0, f8Enter: 0.8, f8Hold: 0.7 });
   near(PINCH.RATIO_ENTER, 0.3, 1e-9, "pinch calibrado");
+  check(pinchGates().backEnter === 1.1 && pinchGates().f8Enter === 0.8 && pinchGates().archHold === 0.05,
+    "forma del pinch calibrada");
   near(CURSOR_FILTER.minCutoff, 0.8, 1e-9, "suavizado del cursor calibrado");
   check(UI_TARGET.HYSTERESIS_PX === 14 && UI_PRESS.TRAVEL_MIN === 40, "histeresis y recorrido calibrados");
   setSetting("pinchSensitivity", "high");
@@ -556,6 +625,8 @@ test("calibracion guardada: se aplica sobre los umbrales y la sensibilidad es re
   near(PINCH.RATIO_ENTER, 0.35, 1e-9, "de vuelta a fabrica");
   check(UI_TARGET.HYSTERESIS_PX === 10 && UI_PRESS.TRAVEL_MIN === 30, "de vuelta a fabrica");
   near(CURSOR_FILTER.minCutoff, 1.2, 1e-9, "suavizado de fabrica");
+  check(pinchGates().backEnter === 1.3 && pinchGates().f8Enter === 0.9 && pinchGates().archEnter === 0.18,
+    "forma de fabrica");
 });
 
 console.log("modelos 3D (fase 6):");

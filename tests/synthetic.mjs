@@ -24,6 +24,12 @@ const POSES = {
   open_closed: { 4: [-0.8, -0.6], 6: [-0.3, -1.3], 7: [-0.4, -1.2], 8: [-0.42, -1.05], ...CURLED },
   fist: { 4: [-0.12, -1.05], 6: [-0.27, -1.2], 7: [-0.2, -0.95], 8: [-0.18, -0.78], ...CURLED },
   fist_tight: { 4: [-0.2, -0.85], 6: [-0.27, -1.2], 7: [-0.2, -0.95], 8: [-0.18, -0.78], ...CURLED },
+  relaxed: {
+    4: [-0.45, -0.8], 6: [-0.3, -1.3], 7: [-0.33, -1.35], 8: [-0.3, -1.25],
+    10: [0, -1.35], 11: [0.03, -1.5], 12: [0.05, -1.45],
+    14: [0.28, -1.3], 15: [0.31, -1.42], 16: [0.33, -1.38],
+    18: [0.53, -1.12], 19: [0.57, -1.25], 20: [0.6, -1.22],
+  },
   dial: {
     1: [-0.35, -0.15, -0.2], 2: [-0.55, -0.3, -0.45], 3: [-0.65, -0.4, -0.7], 4: [-0.72, -0.45, -0.95],
     5: [-0.38, -0.45, -0.85], 6: [-0.4, -0.5, -1.3], 7: [-0.41, -0.52, -1.6], 8: [-0.42, -0.53, -1.85],
@@ -61,8 +67,10 @@ export function hand(pose, px, py, label = "Right", { roll = 0, model = false, g
 
 export function createTimeline(description) {
   const frames = [];
+  let phase = null;
   return {
-    add(...hands) { frames.push({ t: frames.length * FRAME_MS, hands }); },
+    phase(name) { phase = name; },
+    add(...hands) { frames.push({ t: frames.length * FRAME_MS, hands, ...(phase ? { phase } : {}) }); },
     repeat(n, fn) { for (let i = 0; i < n; i++) this.add(...fn(i, n)); },
     build() { return { version: 1, synthetic: true, description, video: VIDEO, frames }; },
   };
@@ -202,13 +210,16 @@ export function scenarios() {
 
   {
     const rand = seededJitter(11, 3);
-    const tl = createTimeline("calibracion: 3 s abierta y quieta, 2 s en pinch, 4 pinch y soltar");
+    const tl = createTimeline("calibracion: abierta y quieta, pinch, pinch y soltar, puno, mano relajada");
     const P = [640, 360];
     const still = (n, pose) => tl.repeat(n, () => [hand(pose, P[0] + rand(), P[1] + rand())]);
-    still(90, "open");
-    still(60, "pinch");
+    tl.phase("open"); still(90, "open");
+    tl.phase("pinch"); still(60, "pinch");
+    tl.phase("taps");
     for (let k = 0; k < 4; k++) { still(10, "open"); still(10, "pinch"); }
     still(10, "open");
+    tl.phase("fist"); still(30, "fist"); still(30, "fist_tight");
+    tl.phase("relaxed"); still(60, "relaxed");
     out.calibration = tl.build();
   }
 

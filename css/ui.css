@@ -118,6 +118,9 @@ body.menu-open .holo-panel { visibility: visible; opacity: 1; transform: none;
 .calib-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .calib-results { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
 .calib-warn { color: var(--holo-danger); font-size: 14px; }
+.calib-live { min-height: 20px; margin-top: 8px; font-size: 15px; font-weight: 600; }
+.calib-live.good { color: var(--holo-ok); }
+.calib-live.bad { color: var(--holo-danger); }
 
 .toast { padding: 10px 16px; border-radius: 10px; background: rgba(6, 24, 32, 0.8); border: 1px solid var(--holo-faint);
   color: var(--holo-text); font-size: 14.5px; line-height: 1.4; text-align: center; opacity: 0; transform: translateY(-6px);

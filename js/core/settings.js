@@ -1,4 +1,4 @@
-import { PINCH, UI_TARGET, UI_PRESS, PALM, CURSOR_FILTER } from "./config.js";
+import { PINCH, PINCH_CLOSED, UI_TARGET, UI_PRESS, PALM, CURSOR_FILTER } from "./config.js";
 import { emit } from "./bus.js";
 
 const KEY = "barehands.settings.v1";
@@ -16,7 +16,13 @@ const DEFAULTS = {
   calibration: null,
 };
 
-const FACTORY = { ratioEnter: 0.35, ratioHold: 0.45, hysteresisPx: 10, travelMinPx: 30, minCutoff: 1.2 };
+const FACTORY = {
+  ratioEnter: 0.35, ratioHold: 0.45,
+  archEnter: 0.18, archHold: 0.12,
+  backEnter: 1.30, backHold: 1.15,
+  f8Enter: 0.9, f8Hold: 0.8,
+  hysteresisPx: 10, travelMinPx: 30, minCutoff: 1.2,
+};
 
 const SENSITIVITY_OFFSET = { low: -0.07, normal: 0, high: 0.07 };
 
@@ -36,6 +42,9 @@ function apply() {
   const off = SENSITIVITY_OFFSET[settings.pinchSensitivity] || 0;
   PINCH.RATIO_ENTER = c.ratioEnter + off;
   PINCH.RATIO_HOLD = c.ratioHold + off;
+  PINCH.ARCH_ENTER = c.archEnter; PINCH.ARCH_HOLD = c.archHold;
+  PINCH.BACKMEAN_ENTER = c.backEnter; PINCH.BACKMEAN_HOLD = c.backHold;
+  PINCH_CLOSED.F8_ENTER = c.f8Enter; PINCH_CLOSED.F8_HOLD = c.f8Hold;
   UI_TARGET.HYSTERESIS_PX = c.hysteresisPx;
   UI_PRESS.TRAVEL_MIN = c.travelMinPx;
   CURSOR_FILTER.minCutoff = c.minCutoff;
