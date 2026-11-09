@@ -246,13 +246,13 @@ export function createArbiter(adapter) {
       const item = palmTarget(p);
       if (!item || !adapter.canRotate(item)) return;
       item.spinPaused = true;
-      r.dial = { itemId: item.id, angle0: p.angle, ry0: item.ry || 0, turn: 0 };
+      r.dial = { itemId: item.id, angle0: p.angle0, ry0: item.ry || 0, turn: 0 };
       adapter.emit("palm:dial-start", { hand: h.id, item });
     }
     const item = adapter.findItem(r.dial.itemId);
     if (!item) { r.dial = null; return; }
     r.dial.turn = backlash(r.dial.turn, wrapAngle(p.angle - r.dial.angle0), PALM.DIAL_DEADZONE);
-    item.ry = r.dial.ry0 + r.dial.turn * PALM.DIAL_GAIN;
+    item.ry += (r.dial.ry0 + r.dial.turn * PALM.DIAL_GAIN - item.ry) * FOLLOW_LERP;
     adapter.onMoved(item);
   }
 

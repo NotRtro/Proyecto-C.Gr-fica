@@ -81,7 +81,7 @@ export function stepPalm(st, m, now, center, spanPx, angle, turn = PALM.TURN) {
     if (st.fired) progress = 0;
   }
   const pose = st.pose === "stop" && st.turning ? "dial" : st.pose;
-  return { pose, progress, fired, angle: st.angle };
+  return { pose, progress, fired, angle: st.angle, angle0: st.angle0 };
 }
 
 export function resetPalm(st) { st.pose = null; st.pending = 0; st.fired = false; st.turning = false; }

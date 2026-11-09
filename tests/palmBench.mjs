@@ -46,7 +46,7 @@ export function createPalmBench({ seed = 1, tremor = 4, span = 110, model = true
   const video = { videoWidth: VIDEO.w, videoHeight: VIDEO.h };
   const k = span / 110;
   const h = { x: 900, y: 400, pose: "palm", roll: 0, phase: rand() * 6.28, visible: true };
-  let t = 1000;
+  let t = 1000, last = [];
 
   function frame() {
     h.phase += 0.35;
@@ -55,11 +55,12 @@ export function createPalmBench({ seed = 1, tremor = 4, span = 110, model = true
     const hands = h.visible
       ? [jitterLandmarks(hand(h.pose, h.x - PALM_OFFSET.x * k + nx, h.y - PALM_OFFSET.y * k + ny, "Right", { span, roll: h.roll, model }), rand, noise, span)]
       : [];
-    pipe.step({ detections: frameToDetections({ hands }), video, now: t, view: VIEW });
+    last = pipe.step({ detections: frameToDetections({ hands }), video, now: t, view: VIEW });
     pipe.step({ detections: null, video, now: t + 16, view: VIEW });
     t += FRAME_MS;
   }
 
+  const palm = () => (last[0] && last[0].palm) || null;
   const wait = (ms) => { for (let i = 0; i < Math.round(ms / FRAME_MS); i++) frame(); };
   function moveTo(x, y, ms) {
     const x0 = h.x, y0 = h.y, n = Math.max(1, Math.round(ms / FRAME_MS));
@@ -72,7 +73,7 @@ export function createPalmBench({ seed = 1, tremor = 4, span = 110, model = true
   const stops = () => scene.events.filter((e) => e === "palm:stop").length;
   const count = (name) => scene.events.filter((e) => e === name).length;
 
-  return { rand, scene, h, wait, moveTo, frame, stops, count };
+  return { rand, scene, h, wait, moveTo, frame, stops, count, palm };
 }
 
 const pick = (r, lo, hi) => lo + r() * (hi - lo);
@@ -121,6 +122,41 @@ export function trialDial(seed, { span = 110, tremor = 4, model = true, noise = 
     sessions: b.count("palm:dial-start"), ends: b.count("palm:dial-end"),
     turned: (item.ry - ry0) * DEG, jitter: (hi - lo) * DEG, lag: (item.ry - ry0 - atEnd) * DEG,
   };
+}
+
+export function trialStillDrift(seed, { span = 110, tremor = 4, model = true, noise = 0, holdMs = 1500 } = {}) {
+  const b = createPalmBench({ seed, tremor, span, model, noise });
+  b.h.visible = false;
+  b.wait(200);
+  b.h.x = pick(b.rand, 700, 950); b.h.y = pick(b.rand, 250, 450); b.h.visible = true;
+  b.wait(300);
+  const a0 = b.palm() ? b.palm().angle : 0;
+  let drift = 0;
+  for (let i = 0; i < Math.round(holdMs / FRAME_MS); i++) {
+    b.frame();
+    const p = b.palm();
+    if (p) drift = Math.max(drift, Math.abs(Math.atan2(Math.sin(p.angle - a0), Math.cos(p.angle - a0))));
+  }
+  return { driftDeg: drift * 180 / Math.PI };
+}
+
+export function trialVolante(seed, { span = 110, tremor = 4, model = true, noise = 0, tilt = 40 } = {}) {
+  const b = createPalmBench({ seed, tremor, span, model, noise });
+  const { item } = b.scene;
+  b.h.visible = false;
+  b.wait(200);
+  b.h.x = pick(b.rand, 700, 950); b.h.y = pick(b.rand, 250, 450); b.h.roll = 0; b.h.visible = true;
+  b.wait(pick(b.rand, 150, 500));
+  const ry0 = item.ry;
+  let maxStep = 0, prev = item.ry;
+  const n = Math.round(pick(b.rand, 600, 1000) / FRAME_MS);
+  for (let i = 1; i <= n; i++) {
+    b.h.roll = tilt * i / n; b.frame();
+    maxStep = Math.max(maxStep, Math.abs(item.ry - prev)); prev = item.ry;
+  }
+  b.wait(500);
+  const DEG = 180 / Math.PI;
+  return { sessions: b.count("palm:dial-start"), stops: b.stops(), turned: (item.ry - ry0) * DEG, maxStepDeg: maxStep * DEG };
 }
 
 export function sweepPalm(seed, ms, { span = 110, tremor = 4, model = true, maxPause = 300 } = {}) {

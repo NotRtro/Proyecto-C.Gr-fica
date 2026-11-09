@@ -18,7 +18,7 @@ import { samplesFromRecording } from "./calibrate.mjs";
 import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, trialDwell, trialHold, sweepMenu } from "./menuBench.mjs";
 import { trialJoin, trialHoldStill, trialHoldAfterMove, summary } from "./twoHandBench.mjs";
 import { trialEmptyTap, trialExplodeDrag, trialVerticalDrag } from "./explodeBench.mjs";
-import { trialStop, trialPalmOverMenu, sweepPalm, trialDial } from "./palmBench.mjs";
+import { trialStop, trialPalmOverMenu, sweepPalm, trialDial, trialStillDrift, trialVolante } from "./palmBench.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
 import {
@@ -936,7 +936,7 @@ test("volante: la palma de alto inclinada 40 grados gira el modelo y no lo detie
     const s = makeScene();
     play(loadRec("model_volante"), s);
     check(s.count("palm:dial-start") === 1, "una sesion de giro, hubo " + s.count("palm:dial-start"));
-    near(s.byId("holo").ry, 26 * DEG, 4 * DEG, "giro: 40 grados menos 10 de arranque y 4 de zona muerta");
+    near(s.byId("holo").ry, 36 * DEG, 4 * DEG, "giro: 40 grados menos 4 de zona muerta, igual que la perilla");
     check(s.count("palm:stop") === 0, "inclinarla no detiene el giro");
   } finally { setSetting("palmTurn", "perilla"); }
 });
@@ -1205,6 +1205,40 @@ test("perilla: sobre el menu abierto no empieza a girar el modelo", () => {
   for (let s = 1; s <= 10; s++) {
     check(trialPalmOverMenu(s, { pose: "dial" }).dials === 0, "empezo la perilla sobre el menu (semilla " + s + ")");
   }
+});
+
+console.log("palma volante (inclinar la palma de alto):");
+
+const withVolante = (fn) => {
+  setSetting("palmTurn", "volante");
+  try { fn(); } finally { setSetting("palmTurn", "perilla"); }
+};
+
+test("volante: una palma quieta no se inclina sola hasta el umbral de giro, ni con 6 px de ruido", () => {
+  for (const model of [true, false]) {
+    let worst = 0;
+    for (let s = 1; s <= 15; s++) worst = Math.max(worst, trialStillDrift(s, { noise: 6, model }).driftDeg);
+    check(worst < PALM.VOLANTE_START * 180 / Math.PI, (model ? "con" : "sin") + " modelo se inclino " + worst.toFixed(1) + " grados");
+  }
+});
+
+test("volante: la palma quieta sigue deteniendo el giro y no gira el modelo", () => {
+  withVolante(() => {
+    for (let s = 1; s <= 10; s++) {
+      check(trialStop(s, { noise: 3, holdMs: 1500 }).ok, "no detuvo (semilla " + s + ")");
+      check(trialStillDrift(s, { noise: 3 }).driftDeg < 10, "se inclino sola (semilla " + s + ")");
+    }
+  });
+});
+
+test("volante: inclinar 40 grados gira 36, igual que la perilla, sin detener el giro", () => {
+  withVolante(() => {
+    for (let s = 1; s <= 10; s++) {
+      const r = trialVolante(s, { noise: 3 });
+      check(r.sessions === 1 && r.stops === 0, "sesiones " + r.sessions + ", detenciones " + r.stops + " (semilla " + s + ")");
+      check(Math.abs(r.turned - 36) <= 4, "giro " + r.turned.toFixed(1) + " grados (semilla " + s + ")");
+    }
+  });
 });
 
 console.log("\n" + passed + " ok, " + failed + " fallas");
