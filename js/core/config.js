@@ -21,9 +21,18 @@ export const HANDS = {
   MATCH_MAX: 0.25,
   LOST_GRACE_MS: 180,
   HANDEDNESS_WINDOW: 8,
+  MIN_DETECTION: 0.5,
+  MIN_PRESENCE: 0.5,
+  MIN_TRACKING: 0.5,
 };
 
 export const CURSOR_FILTER = { minCutoff: 1.2, beta: 0.012, dCutoff: 1.0 };
+
+export const CURSOR_CALIBRATION = {
+  TARGET_JITTER_PX: 1.0,
+  MIN_CUTOFF_MIN: 0.3,
+  MIN_CUTOFF_MAX: 3.0,
+};
 
 export const UI_PRESS = {
   CLICK_MAX_MS: 700,

@@ -1,4 +1,4 @@
-import { PINCH, UI_TARGET, UI_PRESS, PALM } from "./config.js";
+import { PINCH, UI_TARGET, UI_PRESS, PALM, CURSOR_FILTER } from "./config.js";
 import { emit } from "./bus.js";
 
 const KEY = "barehands.settings.v1";
@@ -16,7 +16,7 @@ const DEFAULTS = {
   calibration: null,
 };
 
-const FACTORY = { ratioEnter: 0.35, ratioHold: 0.45, hysteresisPx: 10, travelMinPx: 30 };
+const FACTORY = { ratioEnter: 0.35, ratioHold: 0.45, hysteresisPx: 10, travelMinPx: 30, minCutoff: 1.2 };
 
 const SENSITIVITY_OFFSET = { low: -0.07, normal: 0, high: 0.07 };
 
@@ -38,6 +38,7 @@ function apply() {
   PINCH.RATIO_HOLD = c.ratioHold + off;
   UI_TARGET.HYSTERESIS_PX = c.hysteresisPx;
   UI_PRESS.TRAVEL_MIN = c.travelMinPx;
+  CURSOR_FILTER.minCutoff = c.minCutoff;
   PALM.TURN = settings.palmTurn === "volante" ? "volante" : "perilla";
 }
 apply();

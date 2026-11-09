@@ -64,7 +64,9 @@ function renderResult() {
     return;
   }
   const lines = [
+    "Temblor de la mano: " + (Number.isFinite(r.rawJitterPx) ? r.rawJitterPx.toFixed(1) + " px" : "—"),
     "Temblor del cursor: " + r.jitterPx.toFixed(1) + " px",
+    "Suavizado del cursor: " + (Number.isFinite(r.suggest.minCutoff) ? r.suggest.minCutoff.toFixed(2) + " Hz (fábrica 1.20)" : "—"),
     "Dedos abiertos / en pinch: " + r.ratioOpen.toFixed(2) + " / " + r.ratioPinch.toFixed(2),
     "Salto al juntar los dedos: " + (Number.isFinite(r.jumpPx) ? r.jumpPx.toFixed(0) + " px" : "—"),
     "Pinch se activa bajo: " + r.suggest.ratioEnter.toFixed(2) + " (fábrica 0.35)",
@@ -100,7 +102,7 @@ export function updateCalibration(hands, now) {
   lastT = now;
   const h = hands.find((s) => s.source === "hand" && s.present && s.metrics);
   if (h) {
-    samples.push({ t: now, x: h.ax, y: h.ay, ratio: h.metrics.ratio, span: h.spanPx });
+    samples.push({ t: now, x: h.ax, y: h.ay, rx: h.rawX, ry: h.rawY, ratio: h.metrics.ratio, span: h.spanPx });
     elapsed += dt;
   }
   if (elapsed >= STEPS[step].ms) {
@@ -124,6 +126,7 @@ registerAction("calib:save", () => {
   const r = result;
   if (r && r.ok) {
     setSetting("calibration", { ...r.suggest, jitterPx: +r.jitterPx.toFixed(2),
+      rawJitterPx: Number.isFinite(r.rawJitterPx) ? +r.rawJitterPx.toFixed(2) : null,
       jumpPx: Number.isFinite(r.jumpPx) ? +r.jumpPx.toFixed(1) : null, date: new Date().toISOString() });
     toast("Calibración guardada: los umbrales ahora se ajustan a tu mano");
   }

@@ -1,3 +1,5 @@
+import { CURSOR_CALIBRATION } from "../core/config.js";
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const median = (a) => {
   if (!a.length) return NaN;
@@ -33,19 +35,37 @@ function openRuns(valid, isPinch, gapMs = 150) {
   return runs;
 }
 
-function stillestJitter(runs, windowMs) {
+function stillestJitter(runs, windowMs, kx = "x", ky = "y") {
   let best = Infinity;
   for (const open of runs) {
     for (let i = 0; i < open.length; i++) {
       const win = [];
       for (let j = i; j < open.length && open[j].t - open[i].t <= windowMs; j++) win.push(open[j]);
       if (win.length < 8 || win[win.length - 1].t - win[0].t < windowMs * 0.8) continue;
-      const cx = mean(win.map((s) => s.x)), cy = mean(win.map((s) => s.y));
-      const rms = Math.sqrt(mean(win.map((s) => (s.x - cx) ** 2 + (s.y - cy) ** 2)));
+      const cx = mean(win.map((s) => s[kx])), cy = mean(win.map((s) => s[ky]));
+      const rms = Math.sqrt(mean(win.map((s) => (s[kx] - cx) ** 2 + (s[ky] - cy) ** 2)));
       best = Math.min(best, rms);
     }
   }
   return best;
+}
+
+function frameIntervalMs(samples) {
+  const dts = [];
+  for (let i = 1; i < samples.length; i++) {
+    const a = samples[i - 1], b = samples[i];
+    if (b.rx !== a.rx || b.ry !== a.ry) dts.push(b.t - a.t);
+  }
+  return dts.length ? median(dts) : NaN;
+}
+
+export function minCutoffFor(rawJitterPx, frameMs, targetPx = CURSOR_CALIBRATION.TARGET_JITTER_PX) {
+  const { MIN_CUTOFF_MIN: lo, MIN_CUTOFF_MAX: hi } = CURSOR_CALIBRATION;
+  if (!(rawJitterPx > targetPx) || !(frameMs > 0)) return hi;
+  const r = (targetPx / rawJitterPx) ** 2;
+  const a = (2 * r) / (1 + r);
+  const fc = a / (2 * Math.PI * (frameMs / 1000) * (1 - a));
+  return +clamp(fc, lo, hi).toFixed(2);
 }
 
 export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
@@ -74,6 +94,10 @@ export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
     return { ok: false, reason: "No hubo 1 segundo seguido con la mano abierta y quieta.", warnings };
   }
 
+  const hasRaw = valid.every((s) => Number.isFinite(s.rx) && Number.isFinite(s.ry));
+  const rawJitterPx = hasRaw ? stillestJitter(openRuns(valid, isPinch), stillWindowMs, "rx", "ry") : NaN;
+  const frameMs = hasRaw ? frameIntervalMs(valid) : NaN;
+
   const jumps = [];
   for (let i = 3; i < valid.length - 4; i++) {
     if (!isPinch(valid[i - 1]) && isPinch(valid[i])) {
@@ -94,12 +118,13 @@ export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
   const ratioHold = clamp(ratioPinch + 0.6 * (ratioOpen - ratioPinch), ratioEnter + 0.06, 0.62);
   return {
     ok: true, warnings,
-    jitterPx, ratioOpen, ratioPinch, jumpPx, spanPx, transitions: jumps.length,
+    jitterPx, rawJitterPx, frameMs, ratioOpen, ratioPinch, jumpPx, spanPx, transitions: jumps.length,
     suggest: {
       ratioEnter: +ratioEnter.toFixed(3),
       ratioHold: +ratioHold.toFixed(3),
       hysteresisPx: clamp(Math.round(3 * jitterPx), 6, 20),
       travelMinPx: clamp(Math.round(4 * jitterPx), 30, 60),
+      ...(Number.isFinite(rawJitterPx) ? { minCutoff: minCutoffFor(rawJitterPx, frameMs) } : {}),
     },
   };
 }

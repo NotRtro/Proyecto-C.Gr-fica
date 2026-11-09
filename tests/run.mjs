@@ -8,7 +8,10 @@ import { createPointFilter } from "../js/input/filters.js";
 import { CURSOR_FILTER, PINCH, UI_TARGET, UI_PRESS } from "../js/core/config.js";
 import { createPress, stepPress, endPress, clickTravel } from "../js/ui/press.js";
 import { stickyTarget, nearestIn, pickIntent, magnetPoint, createDwell, stepDwell } from "../js/ui/targeting.js";
-import { analyzeHand } from "../js/input/calibration.js";
+import { analyzeHand, minCutoffFor } from "../js/input/calibration.js";
+import { createHandTracker } from "../js/input/hands.js";
+import { createGestureEngine } from "../js/input/gestures.js";
+import { hand } from "./synthetic.mjs";
 import { setSetting } from "../js/core/settings.js";
 import { samplesFromRecording } from "./calibrate.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
@@ -495,9 +498,56 @@ test("calibracion: sin pinch de verdad no calibra (evita guardar umbrales absurd
   check(!analyzeHand([]).ok, "sin muestras");
 });
 
+test("calibracion: mide el temblor sin filtrar y sugiere el suavizado del cursor", () => {
+  const r = analyzeHand(samplesFromRecording(loadRec("calibration")));
+  check(r.ok, r.reason);
+  check(r.rawJitterPx > r.jitterPx, "el temblor crudo es mayor que el del cursor filtrado");
+  near(r.frameMs, 33, 1, "intervalo entre frames de camara (ms)");
+  near(r.suggest.minCutoff, minCutoffFor(r.rawJitterPx, r.frameMs), 1e-9, "minCutoff sugerido");
+});
+
+test("suavizado del cursor: el corte deja el temblor filtrado cerca del objetivo", () => {
+  near(minCutoffFor(3, 33), 1.2, 0.05, "3 px de temblor a 30 fps = valor de fabrica");
+  check(minCutoffFor(6, 33) < minCutoffFor(3, 33), "mas temblor, mas suavizado");
+  check(minCutoffFor(0.5, 33) === 3 && minCutoffFor(60, 33) === 0.3, "acotado entre 0.3 y 3 Hz");
+  const rand = rng(31), A = 5;
+  const raw = Math.sqrt(2 * A * A / 3);
+  const f = createPointFilter({ minCutoff: minCutoffFor(raw, 33), beta: 0, dCutoff: 1 });
+  let err = 0, n = 0;
+  for (let t = 0; t <= 6000; t += 33) {
+    const q = f.filter({ x: 500 + (rand() * 2 - 1) * A, y: 300 + (rand() * 2 - 1) * A }, t);
+    if (t > 1000) { err += (q.x - 500) ** 2 + (q.y - 300) ** 2; n++; }
+  }
+  near(Math.sqrt(err / n), 1.0, 0.3, "temblor filtrado (px)");
+});
+
+test("filtro: los cambios de parametros se aplican a las manos ya presentes", () => {
+  const params = { minCutoff: 0.3, beta: 0, dCutoff: 1 };
+  const f = createPointFilter(params);
+  f.filter({ x: 0, y: 0 }, 0);
+  const slow = f.filter({ x: 100, y: 0 }, 33).x;
+  f.reset();
+  params.minCutoff = 3;
+  f.filter({ x: 0, y: 0 }, 0);
+  check(f.filter({ x: 100, y: 0 }, 33).x > slow, "con mas corte el cursor sigue mas rapido");
+});
+
+test("seguimiento: si la mano reaparece tras perderse, el cursor no vuela desde la posicion vieja", () => {
+  const tracker = createHandTracker(), engine = createGestureEngine();
+  const video = { videoWidth: 1280, videoHeight: 720 }, view = { w: 1280, h: 720 };
+  const step = (hands, t) => engine.update(tracker.update(frameToDetections({ hands }), t), video, t, view);
+  let t = 0;
+  for (let i = 0; i < 20; i++, t += 33) step([hand("open", 600, 300)], t);
+  for (let i = 0; i < 3; i++, t += 33) step([], t);
+  const h = step([hand("open", 760, 300)], t).find((s) => s.present);
+  check(h && h.id === "h1", "es la misma mano");
+  near(h.x, h.rawX, 1e-9, "el cursor parte de donde esta la mano");
+});
+
 test("calibracion guardada: se aplica sobre los umbrales y la sensibilidad es relativa", () => {
-  setSetting("calibration", { ratioEnter: 0.3, ratioHold: 0.4, hysteresisPx: 14, travelMinPx: 40 });
+  setSetting("calibration", { ratioEnter: 0.3, ratioHold: 0.4, hysteresisPx: 14, travelMinPx: 40, minCutoff: 0.8 });
   near(PINCH.RATIO_ENTER, 0.3, 1e-9, "pinch calibrado");
+  near(CURSOR_FILTER.minCutoff, 0.8, 1e-9, "suavizado del cursor calibrado");
   check(UI_TARGET.HYSTERESIS_PX === 14 && UI_PRESS.TRAVEL_MIN === 40, "histeresis y recorrido calibrados");
   setSetting("pinchSensitivity", "high");
   near(PINCH.RATIO_ENTER, 0.37, 1e-9, "sensibilidad alta = calibrado + 0.07");
@@ -505,6 +555,7 @@ test("calibracion guardada: se aplica sobre los umbrales y la sensibilidad es re
   setSetting("calibration", null);
   near(PINCH.RATIO_ENTER, 0.35, 1e-9, "de vuelta a fabrica");
   check(UI_TARGET.HYSTERESIS_PX === 10 && UI_PRESS.TRAVEL_MIN === 30, "de vuelta a fabrica");
+  near(CURSOR_FILTER.minCutoff, 1.2, 1e-9, "suavizado de fabrica");
 });
 
 console.log("modelos 3D (fase 6):");

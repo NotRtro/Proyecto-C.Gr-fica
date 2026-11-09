@@ -2,7 +2,7 @@ import { Q } from "../core/env.js";
 import { store } from "../core/store.js";
 import { on } from "../core/bus.js";
 import { settings } from "../core/settings.js";
-import { PUSH_HZ, PALM } from "../core/config.js";
+import { PUSH_HZ, PALM, HANDS } from "../core/config.js";
 import { getItemType, removeItem } from "../items/registry.js";
 import { openCamera, cycleCamera, videoEl } from "../input/camera.js";
 import { currentView } from "../input/coords.js";
@@ -181,7 +181,12 @@ async function loadHandLandmarker() {
   const base = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@" + MEDIAPIPE_VERSION;
   const { FilesetResolver, GestureRecognizer, HandLandmarker } = await import(base + "/vision_bundle.mjs");
   const vision = await FilesetResolver.forVisionTasks(base + "/wasm");
-  const common = { runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.5, minTrackingConfidence: 0.5 };
+  const common = {
+    runningMode: "VIDEO", numHands: 2,
+    minHandDetectionConfidence: HANDS.MIN_DETECTION,
+    minHandPresenceConfidence: HANDS.MIN_PRESENCE,
+    minTrackingConfidence: HANDS.MIN_TRACKING,
+  };
   try {
     return await GestureRecognizer.createFromOptions(vision, { baseOptions: { modelAssetPath: GESTURE_MODEL_URL }, ...common });
   } catch (e) {

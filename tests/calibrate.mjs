@@ -13,7 +13,7 @@ export function samplesFromRecording(rec) {
   for (const f of rec.frames) {
     const hands = engine.update(tracker.update(frameToDetections(f), f.t), video, f.t, view);
     const h = hands.find((s) => s.present && s.metrics);
-    if (h) samples.push({ t: f.t, x: h.ax, y: h.ay, ratio: h.metrics.ratio, span: h.spanPx });
+    if (h) samples.push({ t: f.t, x: h.ax, y: h.ay, rx: h.rawX, ry: h.rawY, ratio: h.metrics.ratio, span: h.spanPx });
   }
   return samples;
 }
@@ -23,6 +23,7 @@ function main(file) {
   const r = analyzeHand(samplesFromRecording(rec));
   console.log("Calibracion de " + file + " (" + rec.frames.length + " frames)\n");
   if (!r.ok) { console.log("No se pudo calibrar: " + r.reason); process.exit(1); }
+  console.log("  temblor de la mano (crudo):  " + r.rawJitterPx.toFixed(1) + " px");
   console.log("  temblor del cursor (quieto): " + r.jitterPx.toFixed(1) + " px");
   console.log("  ratio mano abierta:          " + r.ratioOpen.toFixed(3));
   console.log("  ratio en pinch:              " + r.ratioPinch.toFixed(3));
@@ -33,6 +34,7 @@ function main(file) {
   console.log("  PINCH.RATIO_ENTER = " + r.suggest.ratioEnter + ", PINCH.RATIO_HOLD = " + r.suggest.ratioHold);
   console.log("  UI_TARGET.HYSTERESIS_PX = " + r.suggest.hysteresisPx);
   console.log("  UI_PRESS.TRAVEL_MIN = " + r.suggest.travelMinPx);
+  console.log("  CURSOR_FILTER.minCutoff = " + r.suggest.minCutoff);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
