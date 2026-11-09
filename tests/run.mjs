@@ -15,6 +15,7 @@ import { createGestureEngine } from "../js/input/gestures.js";
 import { hand } from "./synthetic.mjs";
 import { setSetting } from "../js/core/settings.js";
 import { samplesFromRecording } from "./calibrate.mjs";
+import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, sweepMenu } from "./menuBench.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
 import {
@@ -936,6 +937,46 @@ test("fuerza del pinch: 0 con la mano abierta, 1 en el corte, sube al juntar los
   check(pinchStrength({ ratio: 0.9 }) === 0, "mano abierta: 0");
   check(pinchStrength({ ratio: PINCH.RATIO_ENTER }) === 1, "en el corte de entrada: 1");
   check(pinchStrength({ ratio: 0.5 }) < pinchStrength({ ratio: 0.45 }), "sube al acercar los dedos");
+});
+
+console.log("menu con la mano (docs/14, criterios de exito):");
+
+const BENCH_TREMOR = 4;
+const failSeeds = (r) => r.fails.map((f) => f.seed).join(",");
+
+test("abrir el menu con el orbe: al menos 9 de 10 (50 intentos con temblor y salto del pinch)", () => {
+  const r = rate(50, (s) => trialOpenMenu(s, BENCH_TREMOR));
+  check(r.rate >= 0.9, r.ok + "/50, fallan semillas " + failSeeds(r));
+});
+
+test("pulsar la fila correcta: al menos 9 de 10", () => {
+  const r = rate(50, (s) => trialPickRow(s, BENCH_TREMOR));
+  check(r.rate >= 0.9, r.ok + "/50, fallan semillas " + failSeeds(r));
+});
+
+test("la ventana de intencion es la que sostiene la fila correcta", () => {
+  const keep = { ms: UI_TARGET.INTENT_MS, skip: UI_TARGET.INTENT_SKIP_MS };
+  UI_TARGET.INTENT_MS = 0;
+  UI_TARGET.INTENT_SKIP_MS = 0;
+  try {
+    const r = rate(50, (s) => trialPickRow(s, BENCH_TREMOR));
+    check(r.rate < 0.95, "sin intencion deberia fallar mas: " + r.ok + "/50");
+  } finally {
+    UI_TARGET.INTENT_MS = keep.ms;
+    UI_TARGET.INTENT_SKIP_MS = keep.skip;
+  }
+});
+
+test("2 minutos pasando la mano por el menu sin pinch: 0 activaciones", () => {
+  const fired = sweepMenu(7, BENCH_TREMOR, 120000);
+  check(fired.length === 0, "se activo: " + fired.map((f) => f.e + ":" + f.id).join(","));
+});
+
+test("orbe: 0 confusiones entre clic y arrastre", () => {
+  const clicks = rate(25, (s) => trialClickOrDrag(s, BENCH_TREMOR, false));
+  const drags = rate(25, (s) => trialClickOrDrag(s, BENCH_TREMOR, true));
+  check(clicks.ok === 25, "clics tomados como otra cosa: semillas " + failSeeds(clicks));
+  check(drags.ok === 25, "arrastres tomados como otra cosa: semillas " + failSeeds(drags));
 });
 
 console.log("\n" + passed + " ok, " + failed + " fallas");
