@@ -13,6 +13,7 @@ export const PINCH_FEEDBACK = {
 export const PINCH_CLOSED = {
   RATIO_ENTER_K: 0.6, RATIO_HOLD_K: 0.75,
   F8_ENTER: 0.9, F8_HOLD: 0.8,
+  FIST_VETO: false,
 };
 
 export const PINCH_CALIBRATION = {
@@ -23,6 +24,9 @@ export const PINCH_CALIBRATION = {
   ARCH_RANGE: [0.05, 0.4],
   BACK_RANGE: [1.0, 1.6],
   F8_RANGE: [0.75, 1.2],
+  CLOSED_K_RANGE: [0.4, 0.9],
+  FIST_MODEL_MIN: 0.8,
+  MIN_SAMPLES: 10,
 };
 
 export const TAP = { MAX_MS: 300, MAX_PX: 26 };

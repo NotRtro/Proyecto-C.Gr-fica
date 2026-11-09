@@ -26,6 +26,7 @@ export function pinchGates() {
     backEnter: PINCH.BACKMEAN_ENTER, backHold: PINCH.BACKMEAN_HOLD,
     f8Enter: PINCH_CLOSED.F8_ENTER, f8Hold: PINCH_CLOSED.F8_HOLD,
     closedEnterK: PINCH_CLOSED.RATIO_ENTER_K, closedHoldK: PINCH_CLOSED.RATIO_HOLD_K,
+    fistVeto: PINCH_CLOSED.FIST_VETO,
   };
 }
 
@@ -36,14 +37,17 @@ export function pinchKind(wasPinched, m, g = pinchGates()) {
   if (ok) return "ok";
   const closed = wasPinched
     ? m.f8 > g.f8Hold && m.ratio < g.ratioHold * g.closedHoldK
-    : m.f8 > g.f8Enter && m.ratio < g.ratioEnter * g.closedEnterK;
+    : m.f8 > g.f8Enter && m.ratio < g.ratioEnter * g.closedEnterK && !(g.fistVeto && m.gesture === "Closed_Fist");
   return closed ? "closed" : null;
 }
 
 export function pinchFailure(m, g = pinchGates()) {
   if (pinchKind(false, m, g)) return null;
   if (m.ratio >= g.ratioEnter) return "gap";
-  if (m.f8 > g.f8Enter) return "tips";
+  if (m.f8 > g.f8Enter) {
+    const tipsTouch = m.ratio < g.ratioEnter * g.closedEnterK;
+    return tipsTouch && g.fistVeto && m.gesture === "Closed_Fist" ? "fist" : "tips";
+  }
   return "shape";
 }
 

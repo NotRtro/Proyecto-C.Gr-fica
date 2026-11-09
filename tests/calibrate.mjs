@@ -16,7 +16,7 @@ export function samplesFromRecording(rec) {
     if (!h) continue;
     const m = h.metrics;
     samples.push({ t: f.t, phase: f.phase, x: h.ax, y: h.ay, rx: h.rawX, ry: h.rawY,
-      ratio: m.ratio, arch: m.arch, backMean: m.backMean, f8: m.f8, span: h.spanPx });
+      ratio: m.ratio, arch: m.arch, backMean: m.backMean, f8: m.f8, model: m.gesture, span: h.spanPx });
   }
   return samples;
 }
@@ -42,6 +42,7 @@ function main(file) {
   console.log("  CURSOR_FILTER.minCutoff = " + r.suggest.minCutoff);
   console.log("  PINCH.ARCH_ENTER = " + r.suggest.archEnter + ", PINCH.BACKMEAN_ENTER = " + r.suggest.backEnter
     + ", PINCH_CLOSED.F8_ENTER = " + r.suggest.f8Enter + (r.gatesChanged.length ? " (ajustados)" : " (de fabrica)"));
+  console.log("  PINCH_CLOSED.RATIO_ENTER_K = " + r.suggest.closedEnterK + ", PINCH_CLOSED.FIST_VETO = " + r.suggest.fistVeto);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

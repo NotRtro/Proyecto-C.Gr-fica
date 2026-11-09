@@ -96,6 +96,25 @@ function fitCut(pinch, impostors, key, [lo, hi], drop, current) {
   return { enter: +enter.toFixed(3), hold: +Math.min(hold, enter).toFixed(3) };
 }
 
+function fitClosedRatio(pinch, impostors, g) {
+  const passes = (s) => s.f8 > g.f8Enter;
+  const own = pinch.filter(passes);
+  if (own.length < PINCH_CALIBRATION.MIN_SAMPLES) return null;
+  const pHigh = percentile(own.map((s) => s.ratio), 0.9);
+  const rivals = impostors.filter(passes);
+  const iLow = rivals.length ? percentile(rivals.map((s) => s.ratio), 0.1) : Infinity;
+  if (!(iLow - pHigh >= PINCH_CALIBRATION.MIN_GAP)) return null;
+  const [lo, hi] = PINCH_CALIBRATION.CLOSED_K_RANGE;
+  const curEnter = g.ratioEnter * g.closedEnterK, curHold = g.ratioHold * g.closedHoldK;
+  const enter = clamp(Number.isFinite(iLow) ? (pHigh + iLow) / 2 : Math.max(curEnter, pHigh + PINCH_CALIBRATION.MIN_GAP),
+    lo * g.ratioEnter, hi * g.ratioEnter);
+  const hold = Number.isFinite(iLow) ? Math.min(enter + (curHold - curEnter), (enter + iLow) / 2) : enter + (curHold - curEnter);
+  return {
+    enter: +(enter / g.ratioEnter).toFixed(3),
+    hold: +(Math.max(hold, enter) / g.ratioHold).toFixed(3),
+  };
+}
+
 export function fitPinchGates(pinch, impostors, base) {
   const accepts = (g) => (s) => pinchKind(false, s, g) !== null;
   const score = (g) => ({ detect: share(pinch, accepts(g)), falseRate: share(impostors, accepts(g)) });
@@ -118,9 +137,22 @@ export function fitPinchGates(pinch, impostors, base) {
   const closedImpostors = impostors.filter((s) => s.ratio < base.ratioEnter * base.closedEnterK);
   apply(fitCut(pinch, closedImpostors, "f8", PINCH_CALIBRATION.F8_RANGE, base.f8Enter - base.f8Hold, base.f8Enter),
     "f8Enter", "f8Hold");
+  apply(fitClosedRatio(pinch, impostors, g), "closedEnterK", "closedHoldK");
   const after = score(g);
   const better = after.detect > before.detect && after.falseRate <= Math.max(before.falseRate, PINCH_CALIBRATION.MAX_FALSE);
   return better ? { gates: g, ...after, changed } : { gates: base, ...before, changed: [] };
+}
+
+export function fistModelStats(pinch, fist) {
+  const named = (list) => list.filter((s) => typeof s.model === "string");
+  const p = named(pinch), f = named(fist);
+  if (p.length < PINCH_CALIBRATION.MIN_SAMPLES || f.length < PINCH_CALIBRATION.MIN_SAMPLES) return null;
+  const isFist = (s) => s.model === "Closed_Fist";
+  const pinchAsFist = share(p, isFist), fistAsFist = share(f, isFist);
+  return {
+    pinchAsFist, fistAsFist,
+    useful: pinchAsFist <= PINCH_CALIBRATION.MAX_FALSE && fistAsFist >= PINCH_CALIBRATION.FIST_MODEL_MIN,
+  };
 }
 
 export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
@@ -177,7 +209,7 @@ export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
   const sustained = pinch.filter((s) => s.phase === "pinch");
   const shapePinch = (sustained.length >= 10 ? sustained : pinch).filter(hasShape);
   let fit = null;
-  if (shapePinch.length >= 10) {
+  if (shapePinch.length >= PINCH_CALIBRATION.MIN_SAMPLES) {
     const base = { ...pinchGates(), ratioEnter, ratioHold };
     fit = fitPinchGates(shapePinch, impostors.filter(hasShape), base);
     if (fit.detect < PINCH_CALIBRATION.WARN_DETECT) {
@@ -188,6 +220,7 @@ export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
     }
   }
   const g = fit && fit.gates;
+  const model = fistModelStats(sustained, impostors.filter((s) => s.phase === "fist"));
 
   return {
     ok: true, warnings,
@@ -195,6 +228,8 @@ export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
     pinchDetect: fit ? fit.detect : NaN,
     impostorRate: fit && impostors.length ? fit.falseRate : NaN,
     gatesChanged: fit ? fit.changed : [],
+    modelPinchAsFist: model ? model.pinchAsFist : NaN,
+    modelFistAsFist: model ? model.fistAsFist : NaN,
     suggest: {
       ratioEnter: +ratioEnter.toFixed(3),
       ratioHold: +ratioHold.toFixed(3),
@@ -202,7 +237,9 @@ export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
         archEnter: g.archEnter, archHold: g.archHold,
         backEnter: g.backEnter, backHold: g.backHold,
         f8Enter: g.f8Enter, f8Hold: g.f8Hold,
+        closedEnterK: g.closedEnterK, closedHoldK: g.closedHoldK,
       } : {}),
+      fistVeto: !!(model && model.useful),
       hysteresisPx: clamp(Math.round(3 * jitterPx), 6, 20),
       travelMinPx: clamp(Math.round(4 * jitterPx), 30, 60),
       ...(Number.isFinite(rawJitterPx) ? { minCutoff: minCutoffFor(rawJitterPx, frameMs) } : {}),

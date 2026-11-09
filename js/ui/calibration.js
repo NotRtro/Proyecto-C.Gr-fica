@@ -17,6 +17,7 @@ const FAILURE = {
   gap: "Pinch no detectado: junta más el pulgar y el índice.",
   tips: "Pinch no detectado: que las puntas del pulgar y el índice se toquen.",
   shape: "Pinch no detectado: estira los otros tres dedos, o recógelos del todo sin meter el índice.",
+  fist: "Pinch no detectado: tu mano se ve como un puño; deja el índice más estirado.",
 };
 
 const STEPS = PROTOCOL.map((p) => ({ ...p, ...TEXT[p.phase] }));
@@ -100,6 +101,10 @@ function renderResult() {
     "Pinch reconocido: " + percent(r.pinchDetect),
     "Puño o mano relajada tomados por pinch: " + percent(r.impostorRate),
     "Forma del pinch: " + (r.gatesChanged.length ? "ajustada a tu mano" : "valores de fábrica"),
+    "Detector de puño (modelo): " + (Number.isFinite(r.modelFistAsFist)
+      ? (r.suggest.fistVeto ? "activado" : "no se usa") + " · reconoce tu puño " + percent(r.modelFistAsFist)
+        + " · confunde tu pinch " + percent(r.modelPinchAsFist)
+      : "sin datos del modelo"),
     "Temblor de la mano: " + (Number.isFinite(r.rawJitterPx) ? r.rawJitterPx.toFixed(1) + " px" : "—"),
     "Temblor del cursor: " + r.jitterPx.toFixed(1) + " px",
     "Suavizado del cursor: " + (Number.isFinite(r.suggest.minCutoff) ? r.suggest.minCutoff.toFixed(2) + " Hz (fábrica 1.20)" : "—"),
@@ -140,7 +145,7 @@ export function updateCalibration(hands, now) {
   if (h) {
     const m = h.metrics;
     samples.push({ t: now, phase: STEPS[step].phase, x: h.ax, y: h.ay, rx: h.rawX, ry: h.rawY,
-      ratio: m.ratio, arch: m.arch, backMean: m.backMean, f8: m.f8, span: h.spanPx });
+      ratio: m.ratio, arch: m.arch, backMean: m.backMean, f8: m.f8, model: m.gesture, span: h.spanPx });
     elapsed += dt;
   }
   if (elapsed >= STEPS[step].ms) {

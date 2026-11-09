@@ -21,6 +21,8 @@ const FACTORY = {
   archEnter: 0.18, archHold: 0.12,
   backEnter: 1.30, backHold: 1.15,
   f8Enter: 0.9, f8Hold: 0.8,
+  closedEnterK: 0.6, closedHoldK: 0.75,
+  fistVeto: false,
   hysteresisPx: 10, travelMinPx: 30, minCutoff: 1.2,
 };
 
@@ -45,6 +47,8 @@ function apply() {
   PINCH.ARCH_ENTER = c.archEnter; PINCH.ARCH_HOLD = c.archHold;
   PINCH.BACKMEAN_ENTER = c.backEnter; PINCH.BACKMEAN_HOLD = c.backHold;
   PINCH_CLOSED.F8_ENTER = c.f8Enter; PINCH_CLOSED.F8_HOLD = c.f8Hold;
+  PINCH_CLOSED.RATIO_ENTER_K = c.closedEnterK; PINCH_CLOSED.RATIO_HOLD_K = c.closedHoldK;
+  PINCH_CLOSED.FIST_VETO = !!c.fistVeto;
   UI_TARGET.HYSTERESIS_PX = c.hysteresisPx;
   UI_PRESS.TRAVEL_MIN = c.travelMinPx;
   CURSOR_FILTER.minCutoff = c.minCutoff;

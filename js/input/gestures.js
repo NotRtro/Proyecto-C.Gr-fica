@@ -36,6 +36,7 @@ export function createGestureEngine() {
       let change = null;
       if (t.present) {
         const m = pinchMetrics(t.lm, video, t.wl);
+        m.gesture = t.gesture ? t.gesture.name : null;
         const pm = palmMetrics(t.lm, video, t.wl, t.gesture);
         if (!s.pinch.pinched && palmPose(s.palm.pose, pm) === "dial") {
           s.pinch.pending = 0; s.pinch.raw = false; s.pinch.kind = null;

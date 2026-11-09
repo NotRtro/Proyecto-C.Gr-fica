@@ -8,7 +8,7 @@ import { createPointFilter } from "../js/input/filters.js";
 import { CURSOR_FILTER, PINCH, UI_TARGET, UI_PRESS } from "../js/core/config.js";
 import { createPress, stepPress, endPress, clickTravel } from "../js/ui/press.js";
 import { stickyTarget, nearestIn, pickIntent, magnetPoint, createDwell, stepDwell } from "../js/ui/targeting.js";
-import { analyzeHand, minCutoffFor, fitPinchGates } from "../js/input/calibration.js";
+import { analyzeHand, minCutoffFor, fitPinchGates, fistModelStats } from "../js/input/calibration.js";
 import { createHandTracker } from "../js/input/hands.js";
 import { createGestureEngine } from "../js/input/gestures.js";
 import { hand } from "./synthetic.mjs";
@@ -596,6 +596,51 @@ test("diagnostico del pinch: dice que condicion falla", () => {
   check(pinchFailure({ ratio: 0.07, backMean: 1.0, arch: -0.05, f8: 0.8 }) === "shape", "forma: ni estirados ni recogidos");
 });
 
+test("pinch cerrado: si las puntas no llegan a juntarse tanto, relaja su distancia sin dejar pasar impostoras", () => {
+  const pinch = spread({ ratio: 0.25, backMean: 0.9, arch: -0.15, f8: 1.05 }, 40, 0.004);
+  const impostors = [...spread(FIST, 30, 0.004), ...spread({ ...FIST, ratio: 0.07, f8: 0.76 }, 30, 0.004), ...spread(RELAXED, 30, 0.004)];
+  const base = pinchGates();
+  check(pinch.every((m) => !pinchKind(false, m, base)), "con fabrica (0.6 x 0.357 = 0.21) no pasa");
+  const fit = fitPinchGates(pinch, impostors, base);
+  check(fit.changed.includes("closedEnterK"), "ajusta la distancia del pinch cerrado: " + fit.changed.join());
+  check(fit.gates.closedEnterK * base.ratioEnter > 0.25, "el corte queda por encima de este pinch");
+  near(fit.detect, 1, 1e-9, "ahora se reconoce");
+  near(fit.falseRate, 0, 1e-9, "puno, puno apretado y mano relajada siguen rechazados");
+  check(fit.gates.closedHoldK * base.ratioHold >= fit.gates.closedEnterK * base.ratioEnter, "mantener es mas laxo que entrar");
+});
+
+test("detector de puno del modelo: solo se usa si distingue bien tu puno de tu pinch", () => {
+  const tag = (n, model) => Array.from({ length: n }, () => ({ model }));
+  const good = fistModelStats([...tag(40, "None")], [...tag(36, "Closed_Fist"), ...tag(4, "None")]);
+  check(good.useful, "pinch nunca puno y puno 90 % puno: se usa");
+  const confuses = fistModelStats([...tag(30, "None"), ...tag(10, "Closed_Fist")], tag(40, "Closed_Fist"));
+  check(!confuses.useful, "si confunde tu pinch con un puno (25 %) no se usa");
+  const blind = fistModelStats(tag(40, "None"), [...tag(20, "Closed_Fist"), ...tag(20, "None")]);
+  check(!blind.useful, "si no reconoce tu puno (50 %) no se usa");
+  check(fistModelStats([], tag(40, "Closed_Fist")) === null, "sin datos del modelo no decide");
+});
+
+test("detector de puno del modelo: bloquea el inicio de un pinch cerrado pero no suelta uno en curso", () => {
+  const closedPinch = { ratio: 0.07, backMean: 0.9, arch: -0.2, f8: 1.1, gesture: "Closed_Fist" };
+  const g = { ...pinchGates(), fistVeto: true };
+  check(pinchKind(false, closedPinch, g) === null, "no empieza si el modelo ve un puno");
+  check(pinchKind(true, closedPinch, g) === "closed", "pero no suelta un pinch que ya estaba");
+  check(pinchKind(false, { ...closedPinch, gesture: "None" }, g) === "closed", "sin puno del modelo, pasa");
+  check(pinchKind(false, closedPinch, pinchGates()) === "closed", "desactivado (fabrica), el modelo no influye");
+  check(pinchFailure(closedPinch, g) === "fist", "el diagnostico lo explica");
+});
+
+test("calibracion: con datos del modelo decide si activa el detector de puno", () => {
+  const samples = samplesFromRecording(loadRec("calibration"))
+    .map((s) => ({ ...s, model: s.phase === "fist" ? "Closed_Fist" : "None" }));
+  const r = analyzeHand(samples);
+  check(r.ok, r.reason);
+  near(r.modelFistAsFist, 1, 1e-9, "el modelo reconoce el puno");
+  near(r.modelPinchAsFist, 0, 1e-9, "y no confunde el pinch");
+  check(r.suggest.fistVeto === true, "se activa");
+  check(analyzeHand(samplesFromRecording(loadRec("calibration"))).suggest.fistVeto === false, "sin modelo, no");
+});
+
 test("pinch en 3D: con los puntos en metros el pinch agarra y arrastra igual", () => {
   const s = makeScene();
   const pipe = createInputPipeline(s.adapter);
@@ -612,7 +657,10 @@ test("pinch en 3D: con los puntos en metros el pinch agarra y arrastra igual", (
 
 test("calibracion guardada: se aplica sobre los umbrales y la sensibilidad es relativa", () => {
   setSetting("calibration", { ratioEnter: 0.3, ratioHold: 0.4, hysteresisPx: 14, travelMinPx: 40, minCutoff: 0.8,
-    archEnter: 0.1, archHold: 0.05, backEnter: 1.1, backHold: 1.0, f8Enter: 0.8, f8Hold: 0.7 });
+    archEnter: 0.1, archHold: 0.05, backEnter: 1.1, backHold: 1.0, f8Enter: 0.8, f8Hold: 0.7,
+    closedEnterK: 0.7, closedHoldK: 0.8, fistVeto: true });
+  check(pinchGates().closedEnterK === 0.7 && pinchGates().closedHoldK === 0.8 && pinchGates().fistVeto === true,
+    "pinch cerrado calibrado");
   near(PINCH.RATIO_ENTER, 0.3, 1e-9, "pinch calibrado");
   check(pinchGates().backEnter === 1.1 && pinchGates().f8Enter === 0.8 && pinchGates().archHold === 0.05,
     "forma del pinch calibrada");
@@ -627,6 +675,7 @@ test("calibracion guardada: se aplica sobre los umbrales y la sensibilidad es re
   near(CURSOR_FILTER.minCutoff, 1.2, 1e-9, "suavizado de fabrica");
   check(pinchGates().backEnter === 1.3 && pinchGates().f8Enter === 0.9 && pinchGates().archEnter === 0.18,
     "forma de fabrica");
+  check(pinchGates().closedEnterK === 0.6 && pinchGates().fistVeto === false, "pinch cerrado de fabrica");
 });
 
 console.log("modelos 3D (fase 6):");
