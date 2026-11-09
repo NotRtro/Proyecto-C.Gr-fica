@@ -6,7 +6,7 @@ import { tapTravel } from "../js/input/arbiter.js";
 import { pinchStrength, pinchGates, pinchKind, pinchFailure } from "../js/input/recognizers/pinch.js";
 import { frameToDetections } from "../js/input/recorder.js";
 import { createPointFilter } from "../js/input/filters.js";
-import { CURSOR_FILTER, PINCH, UI_TARGET, UI_PRESS, TAP, EXPLODE_DRAG, HOLO } from "../js/core/config.js";
+import { CURSOR_FILTER, PINCH, UI_TARGET, UI_PRESS, TAP, EXPLODE_DRAG, HOLO, PALM } from "../js/core/config.js";
 import { createPress, stepPress, endPress, clickTravel } from "../js/ui/press.js";
 import { stickyTarget, nearestIn, pickIntent, magnetPoint, createDwell, stepDwell } from "../js/ui/targeting.js";
 import { analyzeHand, minCutoffFor, fitPinchGates, fistModelStats } from "../js/input/calibration.js";
@@ -18,6 +18,7 @@ import { samplesFromRecording } from "./calibrate.mjs";
 import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, trialDwell, trialHold, sweepMenu } from "./menuBench.mjs";
 import { trialJoin, trialHoldStill, trialHoldAfterMove, summary } from "./twoHandBench.mjs";
 import { trialEmptyTap, trialExplodeDrag, trialVerticalDrag } from "./explodeBench.mjs";
+import { trialStop, trialPalmOverMenu, sweepPalm } from "./palmBench.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
 import {
@@ -1123,6 +1124,46 @@ test("desarmar: arrastrar en vertical no desarma", () => {
     for (let s = 1; s <= 10; s++) {
       check(trialVerticalDrag(s, { span, tremor: 4 * span / 110 }).ok, "mano de " + span + " px desarmo (semilla " + s + ")");
     }
+  }
+});
+
+console.log("palma de alto (detener / reanudar el giro):");
+
+test("palma: detiene el giro con y sin modelo, mano lejos, normal o cerca, inclinada hasta 30 grados", () => {
+  for (const model of [true, false]) {
+    for (const span of [60, 110, 200]) {
+      for (let s = 1; s <= 6; s++) {
+        check(trialStop(s, { span, tremor: 8 * span / 110, model, roll: (s % 3) * 15 }).ok,
+          (model ? "con" : "sin") + " modelo, mano de " + span + " px (semilla " + s + ")");
+      }
+    }
+  }
+});
+
+test("palma: quieta sobre el menu abierto no detiene el modelo", () => {
+  for (const model of [true, false]) {
+    for (let s = 1; s <= 15; s++) {
+      check(trialPalmOverMenu(s, { model }).stops === 0, (model ? "con" : "sin") + " modelo se detuvo (semilla " + s + ")");
+    }
+  }
+});
+
+test("palma: pasar la palma abierta 2 min sin detenerse no activa nada", () => {
+  for (const span of [110, 200]) {
+    const n = sweepPalm(12, 120000, { span, tremor: 4 * span / 110 });
+    check(n === 0, "mano de " + span + " px: " + n + " activaciones");
+  }
+});
+
+test("palma: con 0,6 s una palma que pasa ya se activa (por eso 0,8 s)", () => {
+  const keep = PALM.STOP_MS;
+  PALM.STOP_MS = 600;
+  try {
+    let n = 0;
+    for (let k = 0; k < 3; k++) n += sweepPalm(10 + k, 120000, { span: 200, tremor: 4 * 200 / 110 });
+    check(n > 0, "con 0,6 s deberia activarse al pasar");
+  } finally {
+    PALM.STOP_MS = keep;
   }
 });
 

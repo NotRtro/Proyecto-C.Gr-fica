@@ -234,7 +234,8 @@ export function createArbiter(adapter) {
 
   function onPalm(h, r) {
     const p = h.palm;
-    if (!p || locked || h.pinched || r.role !== "idle") { if (r.dial) endDial(r); return; }
+    const onUi = p && adapter.isUiAt && adapter.isUiAt(p.x, p.y);
+    if (!p || onUi || locked || h.pinched || r.role !== "idle") { if (r.dial) endDial(r); return; }
     if (p.fired) {
       const item = palmTarget(p);
       if (item) {
