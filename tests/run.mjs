@@ -1,13 +1,8 @@
-// Tests del motor de gestos, sin camara ni navegador:
-//   node tests/run.mjs   (o: npm test)
-//
-// Cada grabacion de tests/recordings/ se reproduce por la MISMA tuberia que usa el
-// tracker (hands.js -> gestures.js -> arbiter.js) sobre una escena falsa, y se
-// verifica el resultado. Si faltan grabaciones: node tests/make-recordings.mjs
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInputPipeline } from "../js/input/pipeline.js";
+import { pinchStrength } from "../js/input/recognizers/pinch.js";
 import { frameToDetections } from "../js/input/recorder.js";
 import { createPointFilter } from "../js/input/filters.js";
 import { CURSOR_FILTER, PINCH, UI_TARGET, UI_PRESS } from "../js/core/config.js";
@@ -28,9 +23,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const VIEW = { w: 1280, h: 720 };
 const DEG = Math.PI / 180;
 
-// ---- escena falsa ---------------------------------------------------------
-
-// Mismas posiciones y tamanos que el tracker en una ventana de 1280x720.
 function makeScene({ card = false } = {}) {
   const items = [{ id: "holo", type: "holo", x: 640, y: 324, w: 480, h: 480, scale: 1, ry: 0,
     explodeTarget: 0, rotatable: true, explodable: true }];
@@ -57,8 +49,6 @@ function makeScene({ card = false } = {}) {
   return { items, events, adapter, byId, count };
 }
 
-// Reproduce una grabacion: un paso por frame de camara y uno intermedio sin
-// camara nueva (el navegador corre a ~60 fps y la camara a ~30).
 function play(rec, scene, onStep = () => {}) {
   const pipe = createInputPipeline(scene.adapter);
   const video = { videoWidth: rec.video.w, videoHeight: rec.video.h };
@@ -80,8 +70,6 @@ function loadRec(name) {
   return JSON.parse(readFileSync(p, "utf8"));
 }
 
-// ---- mini framework -------------------------------------------------------
-
 let failed = 0, passed = 0;
 function test(name, fn) {
   try { fn(); passed++; console.log("  ok   " + name); }
@@ -92,8 +80,6 @@ function near(actual, expected, tol, what) {
   check(Math.abs(actual - expected) <= tol,
     what + ": esperado " + expected.toFixed(3) + " +-" + tol + ", obtenido " + actual.toFixed(3));
 }
-
-// ---- tests con grabaciones ------------------------------------------------
 
 console.log("gestos (grabaciones sinteticas):");
 
@@ -195,7 +181,6 @@ test("pinch_mixed: un pinch OK que se cierra a mitad del arrastre no se suelta",
   play(loadRec("pinch_mixed"), s);
   check(s.count("cursor:pinch-start") === 1, "un solo pinch, hubo " + s.count("cursor:pinch-start"));
   check(s.count("grab:start") === 1 && s.count("grab:end") === 1, "1 agarre y 1 soltar");
-  // el punto de pinch de la pose cerrada esta 12 px a la izquierda del de la pose OK
   near(s.byId("holo").x, 828, 12, "x final del reactor");
 });
 
@@ -204,8 +189,6 @@ test("fist: un puno sobre el reactor no es pinch (ni el apretado con el pulgar e
   play(loadRec("fist"), s);
   check(s.events.length === 0, "no deberia haber eventos, hubo: " + s.events.map((e) => e.e).join(","));
 });
-
-// ---- mouse (sin grabacion) --------------------------------------------------
 
 console.log("mouse:");
 
@@ -270,12 +253,11 @@ test("bloqueo (menu, fase 5): suelta lo agarrado y los taps no tocan la escena",
 
 test("interfaz encima: un pinch sobre el menu no agarra ni explota lo de atras", () => {
   const s = makeScene();
-  // Simula un panel de menu que tapa la franja x >= 600 (encima de parte del reactor).
   s.adapter.isUiAt = (x) => x >= 600;
   const pipe = createInputPipeline(s.adapter);
   let t = 1000;
   const step = (m) => pipe.step({ detections: null, video: null, now: (t += 16), view: VIEW, extra: [m] });
-  step(mouseState(700, 300, true, "start")); // sobre el reactor, pero la UI esta encima
+  step(mouseState(700, 300, true, "start"));
   for (let i = 1; i <= 10; i++) step(mouseState(700 + i * 30, 300, true));
   step(mouseState(1000, 300, false, "end"));
   near(s.byId("holo").x, 640, 0.001, "el reactor no se movio");
@@ -284,18 +266,13 @@ test("interfaz encima: un pinch sobre el menu no agarra ni explota lo de atras",
   check(end && end.x === 1000 && end.y === 300, "pinch-end trae la posicion (para los botones)");
 });
 
-// ---- interfaz: click vs arrastre (js/ui/press.js) y filtro del cursor ------
-
 console.log("interfaz (docs/14, paso A):");
 
-// Ruido determinista (mismo resultado en cada corrida).
 function rng(seed) {
   let s = seed >>> 0;
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
 
-// Simula un grab de mano sobre la interfaz: temblor de +-jitter px alrededor de
-// una trayectoria. path(t) -> {x, y} (t en ms). Devuelve eventos y resultado.
 function simulatePress({ ms, path = () => ({ x: 0, y: 0 }), jitter = 0, draggable = false,
   holdMs = 0, source = "hand", spanPx = 110, seed = 1 }) {
   const rand = rng(seed);
@@ -376,7 +353,6 @@ test("filtro One Euro: quita la mayor parte del temblor y sigue rapido a la mano
     if (t > 500) { rawErr += Math.hypot(raw.x - 500, raw.y - 300); filtErr += Math.hypot(q.x - 500, q.y - 300); n++; }
   }
   check(filtErr / n < 0.4 * (rawErr / n), "temblor filtrado " + (filtErr / n).toFixed(2) + " px vs crudo " + (rawErr / n).toFixed(2) + " px");
-  // Movimiento rapido de 300 px en 200 ms: a los 150 ms de terminado debe estar a menos de 25 px.
   let q = null;
   for (let t = 2033; t <= 2400; t += 33) {
     const x = 500 + Math.min(1, (t - 2033) / 200) * 300;
@@ -385,11 +361,8 @@ test("filtro One Euro: quita la mayor parte del temblor y sigue rapido a la mano
   check(Math.abs(q.x - 800) < 25, "retraso tras moverse: " + Math.abs(q.x - 800).toFixed(1) + " px");
 });
 
-// ---- interfaz: a que fila apunta la mano (js/ui/targeting.js) ----------------
-
 console.log("interfaz (docs/14, paso B):");
 
-// Dos filas del menu como las del CSS: 56 px de alto y 6 px de separacion.
 const ROW_A = { id: "A", r: { left: 100, right: 420, top: 100, bottom: 156 } };
 const ROW_B = { id: "B", r: { left: 100, right: 420, top: 162, bottom: 218 } };
 const ROWS = [ROW_A, ROW_B];
@@ -422,8 +395,6 @@ test("punto de intencion: se pulsa la fila apuntada ANTES de juntar los dedos (e
   const rand = rng(12);
   const history = [];
   let cur = null, t = 0, y = 0;
-  // 600 ms apuntando al centro de A con temblor, luego ~130 ms cerrando los dedos
-  // (el cursor baja 42 px hasta la fila B) y el pinch se confirma.
   for (; t <= 600; t += 33) {
     y = 128 + (rand() * 2 - 1) * 5;
     cur = stickyTarget(cur, candidate(260, y), 260, y, rectOfRow);
@@ -453,11 +424,8 @@ test("cursor magnetico: se centra en la fila sin moverse en x", () => {
   near(p.y, 105 + (128 - 105) * 0.7, 0.001, "y");
 });
 
-// ---- interfaz: seleccion por permanencia (dwell) -----------------------------
-
 console.log("interfaz (docs/14, paso C):");
 
-// Recorre una trayectoria de (key, x, y) cada 33 ms y cuenta disparos.
 function simulateDwell(samples) {
   const d = createDwell();
   const fires = [];
@@ -486,13 +454,9 @@ test("permanencia: salir y volver al boton permite pulsarlo de nuevo", () => {
 });
 
 test("permanencia: el menu re-dibujado (mismo boton, nodo nuevo) no dispara dos veces", () => {
-  // La clave es la accion: tras desplegar una carpeta, su fila es otro nodo pero
-  // la misma accion; no debe volver a plegarse sola.
   const fires = simulateDwell(hold(90, "menu:folder|view", 8));
   check(fires.length === 1, "disparos: " + fires.length);
 });
-
-// ---- calibracion de la mano (js/input/calibration.js) -----------------------
 
 console.log("calibracion (docs/14, paso D):");
 
@@ -509,7 +473,7 @@ test("calibracion: recupera los valores conocidos de la grabacion del protocolo"
 });
 
 test("calibracion: mide el temblor real y ajusta la histeresis", () => {
-  const rand = rng(21), A = 6; // temblor uniforme +-6 px => RMS = sqrt(2*36/3) = 4.9 px
+  const rand = rng(21), A = 6;
   const samples = [];
   let t = 0;
   for (let i = 0; i < 60; i++, t += 33) samples.push({ t, x: 500 + (rand() * 2 - 1) * A, y: 300 + (rand() * 2 - 1) * A, ratio: 0.7, span: 110 });
@@ -519,7 +483,6 @@ test("calibracion: mide el temblor real y ajusta la histeresis", () => {
   }
   const r = analyzeHand(samples);
   check(r.ok, r.reason);
-  // Se mide el segundo MAS quieto: da algo menos que el RMS de toda la serie.
   near(r.jitterPx, Math.sqrt(2 * A * A / 3), 0.9, "temblor medido (px)");
   check(r.suggest.hysteresisPx === Math.round(3 * r.jitterPx),
     "histeresis sugerida = 3 x temblor: " + r.suggest.hysteresisPx + " vs " + (3 * r.jitterPx).toFixed(1));
@@ -543,8 +506,6 @@ test("calibracion guardada: se aplica sobre los umbrales y la sensibilidad es re
   near(PINCH.RATIO_ENTER, 0.35, 1e-9, "de vuelta a fabrica");
   check(UI_TARGET.HYSTERESIS_PX === 10 && UI_PRESS.TRAVEL_MIN === 30, "de vuelta a fabrica");
 });
-
-// ---- catalogo 3D: plan de explode por piezas (js/three/explodePlan.js) -------
 
 console.log("modelos 3D (fase 6):");
 
@@ -583,16 +544,12 @@ test("apariencia: con texturas o colores propios se ve original; sin nada, holog
   check(!hasOwnLook([mat([1, 1, 1])]), "solo el blanco por defecto de GLTFLoader -> holografico");
   check(!hasOwnLook([mat([0.8, 0.8, 0.8]), mat([0.8, 0.8, 0.8])]), "todo el gris de fabrica de Blender -> holografico");
   check(hasOwnLook([mat([1, 1, 1], true)]), "con textura -> original");
-  // colores reales del Buggy (sin texturas): rojo, gris y blanco
   check(hasOwnLook([mat([0.54, 0.25, 0.25]), mat([0.4, 0.4, 0.4]), mat([1, 1, 1])]), "Buggy -> original");
   check(hasOwnLook([mat([0.9, 0.9, 0.9]), mat([0.1, 0.1, 0.1])]), "blanco y negro -> original");
 });
 
-// ---- fase 7: piezas (js/three/pieces.js) ------------------------------------
-
 console.log("gemelo digital (fase 7):");
 
-// Arbol de prueba: N(mesh, ...hijos) con un nombre para identificar cada nodo.
 const N = (name, mesh, ...children) => ({ name, mesh, children });
 const names = (list) => list.map((n) => n.name).join(",");
 
@@ -611,7 +568,6 @@ test("piezas: con pocas piezas se abre la mas grande (sin malla propia)", () => 
   const carro = N("carroceria", false, N("puerta", true), N("capo", true), N("techo", true));
   const root = N("scene", false, N("raiz", false, carro, N("rueda", true)));
   check(names(findPieces(root)) === "puerta,capo,techo,rueda", "piezas: " + names(findPieces(root)));
-  // con malla propia no se abre: moverla moveria tambien a sus hijos
   const base = N("base", true, N("tapa", true));
   const root2 = N("scene", false, N("raiz", false, base, N("rueda", true)));
   check(names(findPieces(root2)) === "base,rueda", "con malla propia: " + names(findPieces(root2)));
@@ -664,8 +620,6 @@ test("iman: encaja cerca de su lugar (relativo al tamano del cuadro), no lejos",
   check(shouldSnap(PIECES.SNAP_FRAC * 1120 - 1, 1120), "con el modelo agrandado el iman crece");
 });
 
-// Escena falsa con un modelo desarmado de 2 piezas en (500,300) y (700,300). Las
-// piezas se mueven con la mano; encajan si se sueltan a < 30 px de su lugar.
 function pieceScene() {
   const s = makeScene();
   const model = { id: "m", type: "model", x: 600, y: 300, w: 560, h: 560, scale: 1, ry: 0 };
@@ -706,7 +660,6 @@ test("piezas (7C/7D): pinch sobre una pieza la arrastra sin mover el modelo; sol
   check(!s.pieces[0].placed, "lejos de su lugar no encaja");
   check(s.model.x === 600 && s.count("grab:start") === 0, "el modelo no se movio");
   check(s.count("cursor:tap") === 0, "tomar una pieza no es tap");
-  // la vuelve a tomar y la suelta cerca de su lugar
   step(mouseState(650, 200, true, "start"));
   for (let i = 1; i <= 10; i++) step(mouseState(650 - i * 14, 200 + i * 9.5, true));
   step(mouseState(510, 295, false, "end"));
@@ -745,11 +698,46 @@ test("armado guiado: orden (manifest o por tamano), solo encaja la que toca, ter
 
 test("manifest del Buggy (media/models/Buggy.json): 16 piezas con nombre y el resto al chasis", () => {
   const manifest = JSON.parse(readFileSync(join(HERE, "..", "media", "models", "Buggy.json"), "utf8"));
-  const g = groupPieces(129, manifest); // el Buggy tiene 129 piezas automaticas
+  const g = groupPieces(129, manifest);
   check(g.length === 16 && g.every((x) => x.label), "16 grupos con nombre, hubo " + g.length);
   check(g.reduce((n, x) => n + x.members.length, 0) === 129, "ninguna pieza se pierde ni se repite");
   check(g[0].label === "Chasis" && g[0].members.length > 50, "el chasis se lleva las piezas chicas");
   check(g.filter((x) => /^Rueda/.test(x.label)).length === 6, "6 ruedas");
+});
+
+console.log("gestos con modelo entrenado (Fase A):");
+
+test("modelo: la palma quieta detiene el giro; si el modelo no la ve abierta, no", () => {
+  const s = makeScene();
+  play(loadRec("model_palm"), s);
+  const stops = s.events.filter((e) => e.e === "palm:stop").map((e) => e.paused);
+  check(stops.join() === "true", "un solo palm:stop (la 2a palma el modelo dice None): " + stops.join());
+  check(s.count("cursor:pinch-start") === 0, "ningun pinch");
+});
+
+test("modelo + metros: perilla de 40 grados gira ~36; puno hacia la camara no es perilla", () => {
+  const s = makeScene();
+  play(loadRec("model_dial"), s);
+  check(s.count("palm:dial-start") === 1, "una sola sesion de perilla, hubo " + s.count("palm:dial-start"));
+  near(s.byId("holo").ry, 36 * DEG, 2 * DEG, "giro del modelo (rad)");
+  check(s.count("cursor:pinch-start") === 0, "ningun pinch");
+});
+
+test("volante: la palma de alto inclinada 40 grados gira el modelo y no lo detiene", () => {
+  setSetting("palmTurn", "volante");
+  try {
+    const s = makeScene();
+    play(loadRec("model_volante"), s);
+    check(s.count("palm:dial-start") === 1, "una sesion de giro, hubo " + s.count("palm:dial-start"));
+    near(s.byId("holo").ry, 26 * DEG, 4 * DEG, "giro: 40 grados menos 10 de arranque y 4 de zona muerta");
+    check(s.count("palm:stop") === 0, "inclinarla no detiene el giro");
+  } finally { setSetting("palmTurn", "perilla"); }
+});
+
+test("fuerza del pinch: 0 con la mano abierta, 1 en el corte, sube al juntar los dedos", () => {
+  check(pinchStrength({ ratio: 0.9 }) === 0, "mano abierta: 0");
+  check(pinchStrength({ ratio: PINCH.RATIO_ENTER }) === 1, "en el corte de entrada: 1");
+  check(pinchStrength({ ratio: 0.5 }) < pinchStrength({ ratio: 0.45 }), "sube al acercar los dedos");
 });
 
 console.log("\n" + passed + " ok, " + failed + " fallas");

@@ -1,5 +1,3 @@
-// Reactor holografico (puerto de core/hologram.py). Cada item tiene su propio
-// renderer WebGL por ahora; la fase 6 lo reemplaza por una capa three.js unica.
 import * as THREE from "three";
 import { registerItemType } from "./registry.js";
 import { MODEL_PX, HOLO, FOLLOW_LERP } from "../core/config.js";
@@ -42,8 +40,6 @@ registerItemType("holo", {
     item.dissolve = 0; item.dissolveTarget = 0;
   },
   update(item, dt, now) {
-    // Giro automatico (Menu > Vista); se pausa mientras se rota con dos manos y
-    // con la palma de "alto" (item.spinPaused, fase 7B).
     if (settings.autoSpin && !item.manipulated && !item.spinPaused) item.ry += HOLO.SPIN * dt;
     item.view.group.rotation.y = item.ry;
     item.explode += (item.explodeTarget - item.explode) * (1 - Math.exp(-HOLO.EXPLODE_RATE * dt));
@@ -56,7 +52,7 @@ registerItemType("holo", {
     ri.explode += ((def.explode || 0) - ri.explode) * FOLLOW_LERP;
     ri.dissolve += ((def.dissolve || 0) - ri.dissolve) * FOLLOW_LERP;
     ri.view.group.rotation.y = ri.ry;
-    // La render page no tiene preferencias propias: usa las que publica el tracker.
+    ri.view.scene.scale.x = env.mirror ? -1 : 1;
     setUniforms(ri.view, env.now / 1000, ri.explode, ri.dissolve, env.view.wire !== false);
     ri.view.renderer.render(ri.view.scene, ri.view.camera);
   },

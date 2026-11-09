@@ -1,5 +1,3 @@
-// Regenera las grabaciones sinteticas de tests/recordings/.
-//   node tests/make-recordings.mjs   (o: npm run recordings)
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

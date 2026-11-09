@@ -1,12 +1,5 @@
-// Grabacion y reproduccion de sesiones de manos. Una grabacion guarda los
-// landmarks crudos de MediaPipe por frame; reproducirla (?replay=nombre) alimenta
-// la tuberia exactamente como la camara. Sirve para probar gestos sin pararse
-// frente a la webcam y para los tests automaticos (tests/run.mjs).
-//
-// Formato: { version: 1, video: {w, h}, frames: [{ t: ms, hands: [{ label, lm: [[x,y,z] x21] }] }],
-//            setup?: [comandos /cmd a aplicar al empezar cada vuelta, p. ej. add_card] }
-
 const r4 = (v) => Math.round(v * 10000) / 10000;
+const r5 = (v) => Math.round(v * 100000) / 100000;
 
 export function createRecorder() {
   let rec = null, t0 = 0;
@@ -23,7 +16,11 @@ export function createRecorder() {
       if (t0 === null) t0 = now;
       rec.frames.push({
         t: Math.round(now - t0),
-        hands: detections.map((d) => ({ label: d.label, lm: d.lm.map((p) => [r4(p.x), r4(p.y), r4(p.z || 0)]) })),
+        hands: detections.map((d) => ({
+          label: d.label, lm: d.lm.map((p) => [r4(p.x), r4(p.y), r4(p.z || 0)]),
+          ...(d.wl ? { wl: d.wl.map((p) => [r5(p.x), r5(p.y), r5(p.z)]) } : {}),
+          ...(d.gesture ? { g: [d.gesture.name, r4(d.gesture.score)] } : {}),
+        })),
       });
     },
     stop() { const out = rec; rec = null; return out; },
@@ -31,26 +28,19 @@ export function createRecorder() {
 }
 
 export function frameToDetections(frame) {
-  return frame.hands.map((h) => ({ label: h.label, lm: h.lm.map(([x, y, z]) => ({ x, y, z })) }));
+  return frame.hands.map((h) => ({
+    label: h.label, lm: h.lm.map(([x, y, z]) => ({ x, y, z })),
+    wl: h.wl ? h.wl.map(([x, y, z]) => ({ x, y, z })) : null,
+    gesture: h.g ? { name: h.g[0], score: h.g[1] } : null,
+  }));
 }
 
-// Fuente de reproduccion en bucle. next(now) devuelve detecciones solo cuando
-// avanza a un frame nuevo (igual que una camara real), o null si no.
-// onLoop() se llama al empezar cada vuelta (incluida la primera) para que el
-// tracker reinicie la escena: los gestos son relativos, y sin reinicio cada
-// vuelta acumularia su efecto (escala x2, x4, ...).
-//
-// step: true = modo CUADRO A CUADRO: cada llamada avanza exactamente un frame de
-// la grabacion y clock() devuelve el tiempo de la grabacion (no el del reloj).
-// El resultado no depende de la velocidad del navegador: si la pagina pinta a
-// saltos (pestana en segundo plano, panel de pruebas), igual no se pierde ningun
-// gesto. Se activa con ?replay=<nombre>&step=1.
 export function createReplaySource(rec, { loopGapMs = 600, onLoop = () => {}, step = false } = {}) {
   const video = { videoWidth: rec.video.w, videoHeight: rec.video.h };
   const lastT = rec.frames.length ? rec.frames[rec.frames.length - 1].t : 0;
   const FRAME_MS = 33;
   let t0 = null, idx = -1;
-  let base = 0, gap = 0, vt = 0; // modo cuadro a cuadro
+  let base = 0, gap = 0, vt = 0;
 
   function nextRealtime(now) {
     if (t0 === null) { t0 = now; onLoop(); }
@@ -70,7 +60,6 @@ export function createReplaySource(rec, { loopGapMs = 600, onLoop = () => {}, st
       vt = base + rec.frames[idx].t;
       return frameToDetections(rec.frames[idx]);
     }
-    // pausa entre vueltas: frames sin manos
     vt += FRAME_MS;
     if (++gap * FRAME_MS >= loopGapMs) { base = vt + FRAME_MS; idx = -1; gap = 0; }
     return [];

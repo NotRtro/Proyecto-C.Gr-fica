@@ -1,13 +1,3 @@
-// Seguimiento de manos con identidad estable. MediaPipe no garantiza el orden de
-// las manos y a veces intercambia la etiqueta Left/Right; si se usara esa
-// etiqueta como ID, un objeto agarrado se soltaria a mitad del gesto.
-//
-// Aqui cada deteccion se asocia a la mano del frame anterior mas cercana (por
-// posicion de la muneca). Una mano que desaparece por un instante conserva su
-// ID durante HANDS.LOST_GRACE_MS. La lateralidad se decide por votacion.
-//
-// Entrada: [{ lm: [21 landmarks], label: "Left"|"Right" }]
-// Salida:  [{ id, lm, handedness, present, lastSeen }]
 import { HANDS } from "../core/config.js";
 
 export function createHandTracker() {
@@ -34,7 +24,8 @@ export function createHandTracker() {
       if (usedD.has(p.di) || usedT.has(p.ti)) continue;
       usedD.add(p.di); usedT.add(p.ti);
       const t = tracks[p.ti], d = detections[p.di];
-      t.lm = d.lm; t.present = true; t.lastSeen = now;
+      t.lm = d.lm; t.wl = d.wl || null; t.gesture = d.gesture || null;
+      t.present = true; t.lastSeen = now;
       if (d.label) {
         t.labels.push(d.label);
         if (t.labels.length > HANDS.HANDEDNESS_WINDOW) t.labels.shift();
@@ -47,29 +38,33 @@ export function createHandTracker() {
 
     detections.forEach((d, di) => {
       if (usedD.has(di)) return;
-      const t = { id: "h" + (nextId++), lm: d.lm, present: true, lastSeen: now,
+      const t = { id: "h" + (nextId++), lm: d.lm, wl: d.wl || null, gesture: d.gesture || null,
+        present: true, lastSeen: now,
         labels: d.label ? [d.label] : [], handedness: d.label || "Right" };
       tracks.push(t);
     });
 
-    return tracks.map((t) => ({ id: t.id, lm: t.lm, handedness: t.handedness, present: t.present, lastSeen: t.lastSeen }));
+    return tracks.map((t) => ({ id: t.id, lm: t.lm, wl: t.wl, gesture: t.gesture,
+      handedness: t.handedness, present: t.present, lastSeen: t.lastSeen }));
   }
 
   return { update, reset() { tracks = []; } };
 }
 
-// MediaPipe calcula Left/Right suponiendo que la imagen viene espejada (selfie).
-// El tracker le pasa el video SIN espejar (el espejo es solo CSS), asi que la
-// etiqueta sale invertida: se corrige aqui para que "Right" sea la mano derecha
-// real del usuario.
 const SWAP = { Left: "Right", Right: "Left" };
 
-// Convierte el resultado de HandLandmarker.detectForVideo al formato de entrada.
 export function detectionsFromMediaPipe(res) {
   const hands = res.landmarks || [];
   const handedness = res.handedness || [];
+  const world = res.worldLandmarks || [];
+  const gestures = res.gestures || [];
   return hands.map((lm, i) => {
     const raw = handedness[i] && handedness[i][0] && handedness[i][0].categoryName;
-    return { lm, label: SWAP[raw] || null };
+    const g = gestures[i] && gestures[i][0];
+    return {
+      lm, label: SWAP[raw] || null,
+      wl: world[i] || null,
+      gesture: g ? { name: g.categoryName, score: g.score } : null,
+    };
   });
 }

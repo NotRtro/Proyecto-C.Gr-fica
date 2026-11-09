@@ -1,7 +1,3 @@
-// Shader identico (traducido a GLSL ES 1.00) al de core/hologram.py: fresnel,
-// scan lines, ruido fbm para nucleo/venas, wireframe via barycentric, corte
-// por disolucion. modelViewMatrix/projectionMatrix reemplazan a los uniforms
-// custom u_mvp/u_model de la version Python.
 import * as THREE from "three";
 
 const HOLO_VS = `

@@ -1,16 +1,8 @@
-// Pieza apuntada (fase 7, paso 7A): con un modelo desarmado, la pieza bajo cada
-// mano (o el mouse) se resalta (item.hoverPart, lo dibuja js/items/model.js) y
-// junto al cursor aparece una etiqueta con su nombre. Mientras una mano arrastra
-// una pieza (7C) la etiqueta la acompana. Con el panel de depuracion (tecla H) la
-// etiqueta agrega los numeros de pieza automaticos, para escribir el manifest.
-//
-// Las etiquetas viven en la capa de cursores (pointer-events: none), asi nunca
-// tapan la escena para el hit test.
 import { store } from "../core/store.js";
 import { pickAt } from "../stage/interaction.js";
 import { piecesActive, pieceLabel } from "../items/model.js";
 
-const labels = new Map(); // id de mano -> elemento
+const labels = new Map();
 
 function showLabel(h, text) {
   const el = labelFor(h.id);
@@ -18,7 +10,6 @@ function showLabel(h, text) {
   el.style.transform = "translate(" + Math.round(h.x + 22) + "px," + Math.round(h.y - 34) + "px)";
 }
 
-// Pieza que esta arrastrando la mano `id` (si alguna): { item, part }.
 function draggedBy(id) {
   for (const it of store.items) {
     if (it.type !== "model" || !it.view.drags) continue;
@@ -40,7 +31,7 @@ function labelFor(id) {
 }
 
 export function updatePartHover(hands, { locked = false } = {}) {
-  const hovered = new Map(); // item -> pieza
+  const hovered = new Map();
   const shown = new Set();
   for (const h of hands) {
     if (locked || !h.present || h.removed) continue;

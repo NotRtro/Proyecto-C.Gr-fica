@@ -1,5 +1,3 @@
-// Anillo del asistente (Canvas 2D). Tipo "widget" en el protocolo: no se agarra
-// con pinch y sobrevive a "clear".
 import { registerItemType } from "./registry.js";
 import { store } from "../core/store.js";
 import { RING_PX, RING_COLORS } from "../core/config.js";

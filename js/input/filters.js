@@ -1,13 +1,3 @@
-// Filtro "One Euro" (Casiez, Roussel y Vogel, CHI 2012): suavizado adaptativo
-// para senales ruidosas de seguimiento. Con la mano casi quieta filtra mucho
-// (apuntar a una fila sin temblor); con la mano rapida filtra poco (arrastrar sin
-// retraso). Es el estandar en interfaces de manos y punteros.
-//
-//   minCutoff  Hz de corte en reposo: mas bajo = mas suave (y mas lento).
-//   beta       cuanto sube el corte con la velocidad: mas alto = menos retraso.
-//   dCutoff    Hz de corte para estimar la velocidad.
-// Unidades: x en px, t en ms.
-
 function alpha(cutoffHz, dtS) {
   const tau = 1 / (2 * Math.PI * cutoffHz);
   return 1 / (1 + tau / dtS);
@@ -30,7 +20,6 @@ export function createOneEuro({ minCutoff, beta, dCutoff }) {
   };
 }
 
-// Par de filtros para un punto 2D.
 export function createPointFilter(opts) {
   const fx = createOneEuro(opts), fy = createOneEuro(opts);
   return {

@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>HeyTECHI</title>
+<link rel="icon" href="data:," />
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #05070c;
     color: #eaf3ff; font-family: system-ui, sans-serif; user-select: none; }
@@ -44,8 +45,6 @@
     text-shadow: 0 0 10px rgba(95, 227, 255, 0.6); pointer-events: none; }
   .model-status.error { color: #ff8f8f; text-shadow: none; }
 
-  /* Los cursores de mano, el menu, el tutorial y los avisos estan en /css/ui.css. */
-
   #badge { position: fixed; left: 10px; bottom: 10px; padding: 6px 10px; border-radius: 8px;
     font: 12px/1.3 monospace; background: rgba(0, 0, 0, 0.55); display: none; z-index: 40; }
   #badge.visible { display: block; }
@@ -72,9 +71,6 @@
 <pre id="hud"></pre>
 <div id="badge"></div>
 
-<!-- Guardia file:// + carga del modulo principal. Los modulos ES no cargan bajo
-     file://, por eso se decide aqui con un script clasico. Todo el codigo vive
-     en js/ (ver docs/13, "Mapa de modulos"). -->
 <script>
 if (location.protocol === "file:") {
   document.body.innerHTML =

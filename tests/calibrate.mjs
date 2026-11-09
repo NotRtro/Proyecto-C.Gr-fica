@@ -1,11 +1,3 @@
-// Calibracion desde una grabacion (docs/14, paso D):
-//   node tests/calibrate.mjs <grabacion.json>
-//
-// La grabacion se hace en el tracker con la tecla G siguiendo el protocolo del
-// asistente: ~3 s con la mano abierta y quieta, ~2 s en pinch y 4 veces pinch y
-// soltar sin mover la mano. Pasa por la MISMA tuberia que la camara
-// (hands.js -> gestures.js) y usa el mismo analisis que el asistente de la app
-// (js/input/calibration.js).
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { createHandTracker } from "../js/input/hands.js";
@@ -13,7 +5,6 @@ import { createGestureEngine } from "../js/input/gestures.js";
 import { frameToDetections } from "../js/input/recorder.js";
 import { analyzeHand } from "../js/input/calibration.js";
 
-// Muestras de la primera mano presente en cada frame, como las toma el asistente.
 export function samplesFromRecording(rec) {
   const tracker = createHandTracker(), engine = createGestureEngine();
   const video = { videoWidth: rec.video.w, videoHeight: rec.video.h };

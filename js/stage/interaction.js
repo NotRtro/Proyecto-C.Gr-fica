@@ -1,9 +1,3 @@
-// Conecta la tuberia de gestos (pura) con la escena real del navegador.
-// Este adapter es lo unico que el arbitro sabe del DOM.
-//
-// Todo elemento de interfaz que deba "tapar" la escena lleva el atributo
-// data-ui (menu, pestana del menu, tarjeta del tutorial): un pinch encima nunca
-// agarra ni explota lo que hay detras.
 import { store } from "../core/store.js";
 import { emit, on } from "../core/bus.js";
 import {
@@ -16,13 +10,10 @@ function uiElementAt(x, y) {
   return top ? top.closest("[data-ui]") : null;
 }
 
-// Item bajo el punto y, si el tipo lo sabe (modelos 3D), la pieza: { item, part }.
-// Los tipos con pick() se tocan por su silueta: si el punto cae en una zona
-// transparente se sigue buscando lo que hay detras.
 function pickAt(x, y) {
   const tried = new Set();
   for (const el of document.elementsFromPoint(x, y)) {
-    if (el.closest("[data-ui]")) return null; // la interfaz esta encima
+    if (el.closest("[data-ui]")) return null;
     const item = store.items.find((it) => isGrabbable(it) && (it.el === el || it.el.contains(el)));
     if (!item || tried.has(item)) continue;
     tried.add(item);
@@ -39,7 +30,6 @@ function itemAt(x, y) {
   return hit ? hit.item : null;
 }
 
-// Pieza de un modelo desarmado que se puede tomar en (x, y) (fase 7C).
 function pieceAt(x, y) {
   const hit = pickAt(x, y);
   if (!hit || hit.part < 0) return null;
@@ -75,13 +65,11 @@ export const input = createInputPipeline(adapter);
 
 export { pickAt };
 
-// Que hay bajo un punto, para el estado visual del cursor: "ui" | "item" | null.
 export function hoverKindAt(x, y) {
   if (uiElementAt(x, y)) return "ui";
   return itemAt(x, y) ? "item" : null;
 }
 
-// El ultimo modelo agarrado pasa a ser el "activo" (Herramientas, explode).
 on("grab:start", ({ item }) => { if (item) store.activeId = item.id; });
 on("twohand:start", ({ item }) => { if (item) store.activeId = item.id; });
 on("piece:grab", ({ item }) => { if (item) store.activeId = item.id; });

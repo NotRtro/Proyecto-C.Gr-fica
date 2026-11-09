@@ -1,8 +1,3 @@
-/* Interfaz del tracker con estetica holografica (cian translucido, bordes finos
-   con brillo, titulos en mayusculas espaciadas): orbe + panel flotante del menu,
-   tutorial, avisos y cursores de mano. Los objetivos siguen siendo aptos para la
-   mano (filas >= 44 px, orbe de 128 px). */
-
 :root {
   --holo: #5fe3ff;
   --holo-line: rgba(95, 227, 255, 0.55);
@@ -17,28 +12,23 @@
   --holo-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
-/* ---- capas ---- */
 #ui { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
 #ui [data-ui], #ui .ui-btn { pointer-events: auto; }
 #cursors { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
-/* Avisos arriba a la derecha: lejos del orbe/panel del menu (a la izquierda por defecto). */
 #toasts { position: fixed; top: 14px; right: 16px; z-index: 30;
   display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none;
   width: min(420px, calc(100vw - 32px)); }
 
-/* ---- orbe del menu ---- */
 .holo-orb { position: absolute; z-index: 3; width: 140px; height: 140px; border-radius: 50%;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   border: 2px solid var(--holo-line); color: var(--holo-text); font: inherit; cursor: grab;
   background: radial-gradient(circle at 50% 45%, rgba(95, 227, 255, 0.12), var(--holo-fill) 70%);
   box-shadow: var(--holo-glow); backdrop-filter: blur(4px);
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
-/* Area activa invisible de 180 px (el hit-test de un pseudo-elemento cuenta como el orbe). */
 .holo-orb::before { content: ""; position: absolute; inset: -20px; border-radius: 50%; }
 .holo-orb:hover, .holo-orb.hover { border-color: var(--holo);
   box-shadow: 0 0 26px rgba(95, 227, 255, 0.45), inset 0 0 26px rgba(95, 227, 255, 0.12); }
 .holo-orb.pressed { transform: scale(0.96); }
-/* "Levantado": se mantuvo el grab ~0.45 s y ahora se puede mover (docs/14, M3). */
 .holo-orb.lifted { transform: scale(1.08); border-color: var(--holo);
   box-shadow: 0 0 36px rgba(95, 227, 255, 0.65), inset 0 0 30px rgba(95, 227, 255, 0.18); }
 .holo-orb.dragging { cursor: grabbing; }
@@ -48,8 +38,6 @@ body.menu-open .holo-orb { border-color: var(--holo);
 .orb-title { font: 700 14px/1 var(--holo-mono); letter-spacing: 0.22em; padding-left: 0.22em; }
 .orb-sub { font-size: 11px; color: var(--holo-muted); }
 
-/* ---- panel flotante ---- */
-/* z-index: el panel queda por encima de la tarjeta del tutorial si se cruzan. */
 .holo-panel { position: absolute; z-index: 2; width: 340px; max-height: 80vh; display: flex; flex-direction: column;
   border: 1.5px solid var(--holo-line); border-radius: 14px; background: var(--holo-fill);
   box-shadow: var(--holo-glow); backdrop-filter: blur(6px); color: var(--holo-text);
@@ -68,20 +56,17 @@ body.menu-open .holo-panel { visibility: visible; opacity: 1; transform: none;
 .holo-close:hover, .holo-close.hover { border-color: var(--holo); background: var(--holo-soft); }
 .holo-body { overflow-y: auto; min-height: 0; padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 6px; }
 
-/* filas del arbol */
 .holo-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 8px 14px;
   border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--holo-text);
   font: inherit; font-size: 17px; text-align: left; cursor: pointer;
   transition: background 0.12s, border-color 0.12s; }
 .holo-row:hover, .holo-row.hover { background: var(--holo-soft); border-color: var(--holo-line); }
-/* Fijado: el pinch esta en curso sobre este boton (aunque el cursor se mueva un poco). */
 .holo-row.pressed, .holo-chip.pressed { background: rgba(95, 227, 255, 0.24); border-color: var(--holo);
   box-shadow: 0 0 14px rgba(95, 227, 255, 0.35); }
 .holo-row.fired, .holo-chip.fired { background: rgba(95, 227, 255, 0.34); }
 .holo-row.selected .holo-label { color: var(--holo); }
 .holo-row.danger .holo-label { color: var(--holo-danger); }
 .holo-row.danger .holo-glyph { color: var(--holo-danger); }
-/* Filas de "mantener": una barra se llena con --p (0..1). */
 .holo-row.hold { background-image: linear-gradient(to right, rgba(255, 143, 143, 0.32) calc(var(--p, 0) * 100%), transparent 0); }
 .holo-glyph { width: 14px; flex: none; text-align: center; color: var(--holo); font-size: 12px; }
 .holo-row.folder .holo-glyph { font-size: 13px; }
@@ -107,14 +92,12 @@ body.menu-open .holo-panel { visibility: visible; opacity: 1; transform: none;
 .holo-info strong { font-size: 14px; font-weight: 600; }
 .holo-info span:last-child { font-size: 12.5px; color: var(--holo-muted); }
 
-/* ---- botones sueltos (tutorial, fin de sesion) ---- */
 .ui-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 18px;
   border-radius: 10px; border: 1px solid var(--holo-line); background: transparent; color: var(--holo-text);
   font: inherit; font-size: 15px; cursor: pointer; transition: background 0.12s, border-color 0.12s; }
 .ui-btn:hover, .ui-btn.hover { background: var(--holo-soft); border-color: var(--holo); }
 .ui-btn.primary { background: var(--holo-soft); }
 
-/* ---- tutorial ---- */
 .tutorial { position: absolute; z-index: 1; left: 50%; bottom: 24px; transform: translateX(-50%);
   width: min(560px, calc(100vw - 32px)); padding: 16px 20px 18px; border-radius: 14px;
   background: var(--holo-fill); border: 1.5px solid var(--holo-line); box-shadow: var(--holo-glow);
@@ -130,51 +113,45 @@ body.menu-open .holo-panel { visibility: visible; opacity: 1; transform: none;
 .tut-dot.done { background: var(--holo-ok); }
 .tut-dot.current { background: var(--holo); }
 
-/* ---- asistente de calibracion (reusa la tarjeta del tutorial) ---- */
 .calib-bar { margin-top: 14px; height: 6px; border-radius: 3px; background: var(--holo-faint); overflow: hidden; }
 .calib-fill { height: 100%; width: 0; background: var(--holo); transition: width 0.1s linear; }
 .calib-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .calib-results { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
 .calib-warn { color: var(--holo-danger); font-size: 14px; }
 
-/* ---- avisos ---- */
 .toast { padding: 10px 16px; border-radius: 10px; background: rgba(6, 24, 32, 0.8); border: 1px solid var(--holo-faint);
   color: var(--holo-text); font-size: 14.5px; line-height: 1.4; text-align: center; opacity: 0; transform: translateY(-6px);
   transition: opacity 0.25s, transform 0.25s; }
 .toast.visible { opacity: 1; transform: none; }
 .toast.error { border-color: var(--holo-danger); }
 
-/* ---- cursores de mano ---- */
 .cursor { position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.6); box-sizing: border-box; pointer-events: none;
   transition: width 0.12s, height 0.12s, background 0.12s, border-color 0.12s, box-shadow 0.12s; }
 .cursor.hover-item { width: 32px; height: 32px; border-color: var(--holo);
   box-shadow: 0 0 14px rgba(95, 227, 255, 0.6); }
 .cursor.hover-ui { width: 28px; height: 28px; border-color: #ffffff; box-shadow: 0 0 12px rgba(255, 255, 255, 0.5); }
+.cursor.near-pinch { background: radial-gradient(circle, rgba(95, 227, 255, 0.85) 0 calc(var(--s, 0) * 48%),
+  transparent calc(var(--s, 0) * 48% + 1px)); }
 .cursor.pinched { width: 16px; height: 16px; background: rgba(95, 227, 255, 0.9); border-color: var(--holo); }
 .cursor.lost { opacity: 0.3; }
-/* Anillo de progreso de gestos de "mantener" (levantar el orbe, Salir). */
 .cursor::after { content: ""; position: absolute; inset: -12px; border-radius: 50%; opacity: 0;
   background: conic-gradient(var(--holo) calc(var(--p, 0) * 360deg), rgba(255, 255, 255, 0.12) 0);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
 .cursor.progress::after { opacity: 1; }
-/* Palma "perilla" (fase 7B): aro discontinuo que gira mientras se gira el modelo. */
 .cursor.dial { width: 40px; height: 40px; border: 3px dashed var(--holo); background: none;
   box-shadow: 0 0 14px rgba(95, 227, 255, 0.5); animation: cursor-dial 2.4s linear infinite; }
 @keyframes cursor-dial { to { rotate: 360deg; } }
-/* Pulso al confirmar una pulsacion de la interfaz (docs/14 M7). */
 .cursor.confirm::before { content: ""; position: absolute; inset: -6px; border-radius: 50%;
   border: 2px solid var(--holo); animation: cursor-confirm 0.32s ease-out forwards; }
 @keyframes cursor-confirm { from { transform: scale(0.6); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
 
-/* ---- pieza apuntada (fase 7): etiqueta junto al cursor ---- */
 .part-label { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap;
   padding: 5px 10px; border-radius: 8px; border: 1px solid var(--holo-line); background: rgba(4, 16, 22, 0.78);
   color: var(--holo-text); font: 600 14px/1.2 system-ui, sans-serif; letter-spacing: 0.02em;
   box-shadow: var(--holo-glow); }
 
-/* ---- armado guiado (fase 7E): indicador arriba al centro ---- */
 .guide-banner { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); pointer-events: none;
   min-width: 300px; max-width: calc(100vw - 32px); padding: 10px 18px; border-radius: 12px; text-align: center;
   border: 1px solid rgba(255, 192, 77, 0.7); background: rgba(20, 14, 4, 0.72);
@@ -182,10 +159,8 @@ body.menu-open .holo-panel { visibility: visible; opacity: 1; transform: none;
 .guide-step { font: 600 11px/1.3 var(--holo-mono); letter-spacing: 0.12em; text-transform: uppercase; color: #ffd27a; }
 .guide-label { font: 700 20px/1.25 system-ui, sans-serif; margin-top: 4px; }
 .guide-hint { font: 13px/1.3 system-ui, sans-serif; color: var(--holo-muted); margin-top: 2px; }
-/* en pantallas angostas los avisos (arriba a la derecha) lo taparian */
 @media (max-width: 1100px) { .guide-banner { top: auto; bottom: 18px; } }
 
-/* ---- fin de sesion ---- */
 #endscreen { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
   background: #05070c; }
 .end-card { width: min(440px, calc(100vw - 32px)); padding: 28px; border-radius: 16px; text-align: center;

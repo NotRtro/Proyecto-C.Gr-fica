@@ -32,6 +32,13 @@ Requiere Node 18+. No hay dependencias que instalar.
 | `palm_stop.json` | palma de "alto": moviendose no dispara; quieta detiene; otra vez reanuda |
 | `palm_dial.json` | palma "perilla" (dedos a la camara, con profundidad z): girar la muneca 40 grados gira el modelo |
 | `palm_negative.json` | soltar un pinch abriendo la mano y un puno hacia la camara no son gestos de palma |
+| `model_palm.json` | con datos de GestureRecognizer: el modelo manda (una palma que no ve "Open_Palm" no detiene) |
+| `model_dial.json` | con worldLandmarks en metros: perilla de 40 grados; puno hacia la camara no es perilla |
+| `model_volante.json` | modo Volante: la palma de "alto" inclinada gira el modelo y no lo detiene |
+
+Las grabaciones con `model` simulan lo que entrega MediaPipe GestureRecognizer:
+el gesto del clasificador (`g`) y los 21 puntos en metros (`wl`). Las grabaciones
+reales hechas con la tecla G ya los guardan.
 
 Las de esta carpeta son **sinteticas** (`synthetic.mjs` arma las manos a partir
 de poses). Tambien se pueden ver en el navegador:

@@ -1,34 +1,3 @@
-// Arbitro de gestos: decide que hace cada pinch segun el MODO actual, para que
-// los gestos no se pisen entre si. Es puro: todo lo que toca la escena pasa por
-// el `adapter` inyectado (DOM en el navegador, objetos falsos en los tests).
-//
-// Roles por mano:
-//   idle             sin pinch
-//   grab             arrastra un item (offset preservado, sin salto al centro)
-//   piece            arrastra una PIEZA de un modelo desarmado (fase 7C); al soltarla
-//                    puede encajar en su lugar (7D)
-//   two-hand         junto con otra mano escala/rota/mueve un item
-//   explode-pending  pinch en vacio: todavia no se sabe si es un arrastre horizontal
-//   explode          pinch en vacio + arrastre horizontal = explode/assemble
-//   none             pinch sin efecto (vertical en vacio, o sobra una mano)
-//   ui               pinch sobre la interfaz (menu): no toca la escena
-//   locked           el arbitro esta bloqueado (menu abierto)
-//
-// Gestos de palma (fase 7B, mano SIN pinch; ver js/input/recognizers/palm.js):
-//   palma de "alto" quieta  -> item.spinPaused se invierte (detener / reanudar giro)
-//   palma "perilla"         -> gira el modelo (item.ry) con el angulo de la muneca
-// Actuan sobre el modelo bajo la palma o, si no hay, el modelo activo.
-//
-// adapter = {
-//   hitTest(x, y) -> item | null     findItem(id) -> item | null
-//   findExplodable() -> item | null  canRotate(item) -> bool
-//   onMoved(item)   onGrab(item, on)   onTap(item)   emit(evento, payload)
-//   isUiAt(x, y) -> bool   (opcional: hay interfaz encima de la escena en ese punto)
-//   pieceAt(x, y) -> { item, part } | null      (opcional, fase 7: pieza que se puede tomar)
-//   beginPiece(item, part, hand, x, y) -> bool  movePiece(item, hand, x, y)
-//   endPiece(item, hand) -> { snapped, ... } | null
-// }
-// Los items son objetos con x, y (px), scale, ry y, si explotan, explodeTarget.
 import { dist } from "../core/util.js";
 import { TAP, TWO_HAND, EXPLODE_DRAG, FOLLOW_LERP, HOLO, MOUSE, PALM } from "../core/config.js";
 
@@ -45,9 +14,9 @@ function wrapAngle(a) {
 function deadzone(a, dz) { return Math.sign(a) * Math.max(0, Math.abs(a) - dz); }
 
 export function createArbiter(adapter) {
-  const hands = new Map();   // id -> registro de la mano
-  const held = new Map();    // itemId -> cuantas manos lo sostienen
-  let session = null;        // manipulacion a dos manos
+  const hands = new Map();
+  const held = new Map();
+  let session = null;
   let locked = false;
 
   function rec(id) {
@@ -77,8 +46,6 @@ export function createArbiter(adapter) {
     r.role = "idle"; r.itemId = null;
   }
 
-  // ---- piezas (fase 7) ----------------------------------------------------
-
   function startPiece(r, h, piece) {
     if (!adapter.beginPiece(piece.item, piece.part, h.id, h.ax, h.ay)) return false;
     r.role = "piece"; r.itemId = piece.item.id; r.part = piece.part;
@@ -92,8 +59,6 @@ export function createArbiter(adapter) {
     if (item) adapter.emit("piece:drop", { hand: r.id, item, part: r.part, ...(res || {}) });
     r.role = "idle"; r.itemId = null; r.part = null;
   }
-
-  // ---- dos manos ----------------------------------------------------------
 
   function startSession(ra, rb, item) {
     ra.role = "two-hand"; rb.role = "two-hand";
@@ -128,7 +93,6 @@ export function createArbiter(adapter) {
     adapter.onMoved(item);
   }
 
-  // Termina la sesion; la mano que sigue con pinch continua arrastrando sola.
   function endSession(leavingId) {
     const s = session;
     session = null;
@@ -148,8 +112,6 @@ export function createArbiter(adapter) {
     }
   }
 
-  // ---- ciclo de un pinch --------------------------------------------------
-
   function onPinchStart(h, r, now) {
     r.pinchT = now;
     r.start = { x: h.ax, y: h.ay };
@@ -157,7 +119,6 @@ export function createArbiter(adapter) {
     if (locked) { r.role = "locked"; return; }
     if (adapter.isUiAt && adapter.isUiAt(h.ax, h.ay)) { r.role = "ui"; return; }
 
-    // Con un modelo desarmado, el pinch sobre una pieza la toma (fase 7C).
     const piece = adapter.pieceAt ? adapter.pieceAt(h.ax, h.ay) : null;
     if (piece && startPiece(r, h, piece)) return;
 
@@ -192,8 +153,6 @@ export function createArbiter(adapter) {
         const target = adapter.findExplodable();
         if (!target) { r.role = "none"; return; }
         r.role = "explode"; r.itemId = target.id;
-        // Solo se "gasta" el umbral de decision; el resto del recorrido ya cuenta
-        // (un movimiento rapido de mouse puede cruzar el umbral en un solo frame).
         r.exStartX = r.start.x + Math.sign(dx) * EXPLODE_DRAG.START_PX;
         r.ex0 = target.explodeTarget || 0;
         adapter.emit("explode:start", { item: target });
@@ -226,8 +185,6 @@ export function createArbiter(adapter) {
     adapter.emit("cursor:pinch-end", { hand: h.id, x: h.ax, y: h.ay, removed: !!h.removed });
   }
 
-  // ---- palma (fase 7B) ----------------------------------------------------
-
   function palmTarget(p) {
     const it = adapter.hitTest(p.x, p.y);
     return it && adapter.canRotate(it) ? it : adapter.findExplodable();
@@ -253,7 +210,6 @@ export function createArbiter(adapter) {
     if (!r.dial) {
       const item = palmTarget(p);
       if (!item || !adapter.canRotate(item)) return;
-      // girar a mano deja el modelo quieto (la palma de "alto" lo vuelve a soltar)
       item.spinPaused = true;
       r.dial = { itemId: item.id, angle0: p.angle, ry0: item.ry || 0 };
       adapter.emit("palm:dial-start", { hand: h.id, item });
@@ -265,9 +221,6 @@ export function createArbiter(adapter) {
     adapter.onMoved(item);
   }
 
-  // ---- API ----------------------------------------------------------------
-
-  // states: estados de mano (gestures.js) y/o del mouse. Llamar una vez por frame.
   function update(states, now) {
     for (const h of states) {
       const r = rec(h.id);
@@ -282,7 +235,6 @@ export function createArbiter(adapter) {
     if (session) updateSession();
   }
 
-  // Rueda del mouse sobre un item: escala; con Shift rota (si el item rota).
   function wheel(x, y, deltaY, rotate) {
     if (locked) return;
     const item = adapter.hitTest(x, y);
@@ -293,7 +245,6 @@ export function createArbiter(adapter) {
     adapter.onMoved(item);
   }
 
-  // Suelta todo (clear/reset, o al bloquear). Los pinch en curso quedan sin efecto.
   function releaseAll() {
     if (session) endSession(null);
     for (const r of hands.values()) {
@@ -305,7 +256,6 @@ export function createArbiter(adapter) {
     held.clear();
   }
 
-  // Olvida todas las manos (reinicio de la tuberia, p. ej. al repetir una grabacion).
   function reset() { releaseAll(); hands.clear(); }
 
   function setLocked(v) {

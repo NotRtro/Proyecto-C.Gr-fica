@@ -1,7 +1,3 @@
-// Geometria procedural del reactor (puerto de make_reactor/_expand en
-// core/hologram.py). Triangle soup no indexado con atributos custom:
-//   barycentric -> wireframe en el fragment shader sin geometria de lineas
-//   pivot       -> direccion de explode de cada parte
 import * as THREE from "three";
 
 function torusGeom(R, r, nu, nv) {

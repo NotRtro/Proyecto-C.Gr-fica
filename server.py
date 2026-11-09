@@ -1,10 +1,3 @@
-"""Servidor local de barehands: sirve stage.html, guarda el ultimo estado de
-escena, encola comandos para el tracker y protege el acceso a archivos.
-
-Solo libreria estandar. No hace fisica ni interpreta gestos: eso es
-responsabilidad exclusiva del tracker (stage.html). Ver docs/07 para el
-contrato completo del protocolo.
-"""
 from __future__ import annotations
 
 import json
@@ -22,13 +15,10 @@ JS_ROOT = (REPO_ROOT / "js").resolve()
 CSS_ROOT = (REPO_ROOT / "css").resolve()
 RECORDINGS_ROOT = (REPO_ROOT / "tests" / "recordings").resolve()
 
-# MIME explicito: en Windows el registro puede mapear .js a text/plain, y los
-# modulos ES exigen un tipo JavaScript. Solo se sirven extensiones listadas aqui.
 _JS_TYPES = {".js": "text/javascript; charset=utf-8"}
 _JSON_TYPES = {".json": "application/json; charset=utf-8"}
 _CSS_TYPES = {".css": "text/css; charset=utf-8"}
 
-# Prefijo URL -> (carpeta, extensiones permitidas). Solo lectura, sin listados.
 _STATIC_ROUTES = {
     "/js/": (JS_ROOT, _JS_TYPES),
     "/css/": (CSS_ROOT, _CSS_TYPES),
@@ -49,8 +39,8 @@ _ALLOWED = (
     "add_img", "add_card", "clear", "reset", "hand", "give",
     "yank", "hover", "scroll_note", "widget", "explode", "assemble",
     "present",
-    # fase 6: catalogo 3D
     "load_model", "remove_model",
+    "guide", "place_piece",
 )
 
 _LOCK = threading.Lock()
@@ -141,13 +131,6 @@ MODELS_DIR = "models"
 
 
 def list_models() -> list[dict[str, Any]]:
-    """Catalogo de modelos 3D en <media>/models (docs/13, fase 6).
-
-    Acepta dos formas:
-      models/Buggy.glb                (+ opcional models/Buggy.json con el manifest)
-      models/bicicleta/model.glb      (+ opcional models/bicicleta/manifest.json)
-    El manifest puede traer "name", "mode" ("holo" | "solid") y datos de piezas.
-    """
     root = MEDIA_ROOT / MODELS_DIR
     if not root.is_dir():
         return []
@@ -183,11 +166,10 @@ def list_models() -> list[dict[str, Any]]:
 
 
 def resolve_media_src(raw: Any) -> str | None:
-    """Devuelve el path relativo (posix) dentro de MEDIA_ROOT, o None si se rechaza."""
     if not isinstance(raw, str) or not raw.strip():
         return None
     if raw.startswith("/") or raw.startswith("\\") or (len(raw) > 1 and raw[1] == ":"):
-        return None  # ruta absoluta (unix o windows) rechazada de entrada
+        return None
 
     candidate = (MEDIA_ROOT / raw).resolve()
     try:
@@ -210,10 +192,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     server_version = "barehands/0.1"
 
-    def log_message(self, fmt: str, *args: Any) -> None:  # menos ruido en consola
+    def log_message(self, fmt: str, *args: Any) -> None:
         pass
-
-    # -- utilidades de respuesta -------------------------------------------------
 
     def _send_json(self, obj: Any, status: int = 200) -> None:
         body = _json_bytes(obj)
@@ -227,9 +207,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _send_error_json(self, status: int, error: str, detail: str = "") -> None:
         self._send_json({"error": error, "detail": detail}, status)
 
-    # -- GET -----------------------------------------------------------------
-
-    def do_GET(self) -> None:  # noqa: N802 (nombre requerido por http.server)
+    def do_GET(self) -> None:
         path = urllib.parse.urlsplit(self.path).path
 
         if path in ("/", "/stage.html"):
@@ -280,8 +258,6 @@ class Handler(SimpleHTTPRequestHandler):
         self._send_file(REPO_ROOT / "stage.html", "text/html; charset=utf-8")
 
     def _serve_static(self, rel_url: str, root: Path, types: dict[str, str]) -> None:
-        """Archivos de solo lectura (modulos js/, grabaciones de gestos). Misma
-        jaula que /media/*: nada fuera de `root`, solo extensiones de `types`."""
         rel = urllib.parse.unquote(rel_url)
         candidate = (root / rel).resolve()
         try:
@@ -295,9 +271,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         self._send_file(candidate, content_type)
 
-    # -- POST ------------------------------------------------------------------
-
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         path = urllib.parse.urlsplit(self.path).path
         if path == "/state":
             self._handle_post_state()
@@ -345,9 +319,7 @@ class Handler(SimpleHTTPRequestHandler):
             _CMDS.append(body)
         self._send_json({"ok": True})
 
-    # -- jaula de /media/* -------------------------------------------------------
-
-    def translate_path(self, path: str) -> str:  # noqa: D401
+    def translate_path(self, path: str) -> str:
         url_path = urllib.parse.urlsplit(path).path
         if url_path.startswith("/media/"):
             rel = urllib.parse.unquote(url_path[len("/media/"):])

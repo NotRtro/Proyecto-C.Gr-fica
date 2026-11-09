@@ -87,26 +87,11 @@ Luego abre `http://127.0.0.1:8794/stage.html` (control, con cámara) o
 `http://127.0.0.1:8794/stage.html?role=render` (vista transparente para OBS).
 Tests sin cámara: `npm test` (Node 18+, sin dependencias).
 
-Estado completo, arquitectura y reglas del código: [CONTEXTO_PROYECTO.md](CONTEXTO_PROYECTO.md).
-
 ### Modelos 3D
 
 Copia archivos `.glb`/`.gltf` a `media/models/` y aparecen en Menú › Modelos.
 Requisitos para poder desarmarlos: [media/models/README.md](media/models/README.md).
 
-### Plan de la Fase 7: gemelo digital
-
-Objetivo: **el Buggy se desarma y se vuelve a armar pieza por pieza, guiado, con
-gestos y también con el mouse.** Sirve para cualquier modelo separado en piezas;
-el `manifest.json` (nombres, grupos, orden de armado) es opcional.
-
-| Paso | Contenido | Estado |
-|---|---|---|
-| 7A | Piezas y apuntado: pieza = ensamble de la jerarquía del GLB; raycast en el canvas de cada modelo (resalta la pieza y muestra su nombre); el modelo se agarra por su silueta; decodificadores Draco/Meshopt | ✅ |
-| 7B | Gestos de palma: palma de "alto" quieta 0,6 s detiene/reanuda el giro del modelo; palma "perilla" (dedos hacia la cámara + girar la muñeca) lo rota poco a poco. Plan B si la cámara no lo sigue bien: "volante" (palma de alto inclinada) | ✅ (falta probar con cámara) |
-| 7C | Sacar una pieza: con el modelo desarmado, pinch sobre una pieza la toma y la arrastra en el plano de la cámara; se publica en `/state` (OBS) | ✅ |
-| 7D | Encajar: silueta fantasma en su lugar original, imán al soltarla cerca, animación; todas en su lugar = modelo armado | ✅ |
-| 7E | Armado guiado + `manifest.json` del Buggy (16 piezas con nombre y orden); "paso 3 de 16: …"; armado libre para modelos sin manifest; guía de modelos para clientes | ✅ |
 
 Decisiones tomadas:
 - Con el modelo **armado**, el pinch mueve el modelo entero; con el modelo

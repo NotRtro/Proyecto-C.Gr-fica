@@ -1,18 +1,9 @@
-// Dibuja un cursor por mano detectada, con estados visuales:
-//   (normal)   mano detectada: aro tenue
-//   hover-item apuntando a algo que se puede agarrar: aro brillante y mas grande
-//   hover-ui   apuntando a un boton de la interfaz
-//   pinched    pinch confirmado: relleno
-//   lost       la mano se perdio un instante: atenuado
-//   progress   gesto de "mantener" en curso (levantar el orbe, Salir, palma de "alto"): anillo que se llena
-//   dial       palma "perilla": girando el modelo con la muneca
-// El mouse no se dibuja: ya tiene el puntero del sistema.
+import { PINCH_FEEDBACK } from "../core/config.js";
+
 const els = new Map();
 
 function layer() { return document.getElementById("cursors"); }
 
-// opts.kindAt(x, y) -> "ui" | "item" | null ; opts.progressOf(handState) -> 0..1
-// opts.displayOf(handState) -> {x, y} (opcional): donde dibujarlo (cursor magnetico del menu)
 export function renderCursors(states, opts) {
   const seen = new Set();
   for (const h of states) {
@@ -35,6 +26,9 @@ export function renderCursors(states, opts) {
     el.classList.toggle("hover-ui", kind === "ui");
     el.classList.toggle("progress", p > 0.02);
     el.classList.toggle("dial", !!(h.palm && h.palm.pose === "dial"));
+    const s = h.present && !h.pinched ? h.pinchStrength || 0 : 0;
+    el.classList.toggle("near-pinch", s > PINCH_FEEDBACK.SHOW_FROM);
+    el.style.setProperty("--s", s.toFixed(3));
     el.style.setProperty("--p", p.toFixed(3));
   }
   for (const [id, el] of els) {
@@ -42,12 +36,11 @@ export function renderCursors(states, opts) {
   }
 }
 
-// Pulso breve en el cursor de una mano al confirmar una pulsacion (docs/14 M7).
 export function pulseCursor(hand) {
   const el = els.get(hand);
   if (!el) return;
   el.classList.remove("confirm");
-  void el.offsetWidth; // reinicia la animacion si llega otro pulso seguido
+  void el.offsetWidth;
   el.classList.add("confirm");
   setTimeout(() => el.classList.remove("confirm"), 320);
 }

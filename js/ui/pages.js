@@ -1,14 +1,10 @@
-// Secciones del menu y sus acciones. Para agregar una opcion: registrar la accion
-// (registerAction) y agregar su ui.button en la seccion que corresponda. Para una
-// seccion nueva: registerMenuPage(id, { title, build(ui) }) y enlazarla desde
-// "root" con ui.page(id, "Titulo").
 import { store } from "../core/store.js";
 import { emit, on } from "../core/bus.js";
 import { HOLO, MODEL } from "../core/config.js";
 import { findExplodable, spawnItem, findByType, findItem, removeItem, applyTransform } from "../items/registry.js";
 import { catalog, catalogLoaded, refreshCatalog } from "../net/catalog.js";
 import { addModel } from "../stage/models.js";
-import { startGuide, stopGuide } from "../items/model.js";
+import { startGuide, stopGuide, undoLastPiece, resetModelPieces } from "../items/model.js";
 import { cycleCamera } from "../input/camera.js";
 import { resetAll } from "../stage/scene.js";
 import { registerAction } from "./actions.js";
@@ -19,8 +15,6 @@ import { startCalibration } from "./calibration.js";
 import { settings } from "../core/settings.js";
 
 const HOLD_MS = 1500;
-
-// ---- acciones --------------------------------------------------------------
 
 function centerItem(it) {
   it.x = innerWidth / 2; it.y = innerHeight * 0.45; it.scale = 1;
@@ -34,7 +28,6 @@ registerAction("model:reactor", () => {
   closeMenu();
 });
 
-// Catalogo 3D (fase 6): agregar / traer al centro / quitar modelos GLB.
 registerAction("model:add", (src) => { addModel(src); closeMenu(); });
 registerAction("model:remove", (id) => {
   const it = findItem(id);
@@ -42,15 +35,12 @@ registerAction("model:remove", (id) => {
   refreshMenu();
 });
 registerAction("model:refresh", () => { refreshCatalog().then(refreshMenu); });
-// El catalogo se vuelve a leer cada vez que se abre el menu (por si se agrego un .glb).
 on("menu:open", () => { refreshCatalog().then(refreshMenu); });
 on("model:loaded", ({ item, stats }) => {
   toast((item.title || "Modelo") + " listo · " + stats.parts + " piezas · " + Math.round(stats.triangles / 1000) + " mil triángulos");
-  // Avisos para modelos que no se pueden desarmar (media/models/README.md).
   if (stats.skinned) toast((item.title || "El modelo") + " tiene esqueleto (personaje): se puede mover, pero no desarmar", { kind: "error", ms: 7000 });
   else if (stats.parts < 2) toast((item.title || "El modelo") + " es una sola pieza: se puede mover, pero no desarmar. Sepáralo en Blender (P › By Loose Parts)", { kind: "error", ms: 9000 });
 });
-// Fase 7D: encajar piezas y armar el modelo.
 on("piece:drop", ({ snapped, label, placed, total }) => {
   if (snapped) toast("Encajada: " + label + " · " + placed + " de " + total, { ms: 1600 });
 });
@@ -70,13 +60,20 @@ function withModel(fn) {
 registerAction("tools:explode", () => withModel((m) => { m.explodeTarget = HOLO.EXPLODE_OUT; }));
 registerAction("tools:assemble", () => withModel((m) => { m.explodeTarget = 0; }));
 registerAction("tools:center", () => withModel(centerItem));
-// Alternativa con mouse a la palma de "alto" (fase 7B).
 registerAction("tools:spin", () => withModel((m) => {
   m.spinPaused = !m.spinPaused;
+  emit("spin:changed", { item: m, paused: m.spinPaused });
   toast((m.spinPaused ? "Giro detenido · " : "Giro reanudado · ") + (m.title || "modelo"));
 }));
 registerAction("tools:reset", () => { resetAll(); closeMenu(); toast("Escena reiniciada"); });
-// Armado guiado (fase 7E): sobre el modelo activo.
+registerAction("tools:undo", () => withModel((m) => {
+  const label = undoLastPiece(m);
+  toast(label ? "Deshecho: " + label + " vuelve a estar suelta" : "No hay piezas encajadas para deshacer");
+}));
+registerAction("tools:reset-pieces", () => withModel((m) => {
+  if (resetModelPieces(m)) toast("Piezas reiniciadas: todas sueltas");
+  else toast((m.title || "Este modelo") + " no se arma por piezas", { kind: "error" });
+}));
 registerAction("tools:guide", () => withModel((m) => {
   if (m.guide) { stopGuide(m); return; }
   if (!startGuide(m)) toast((m.title || "Este modelo") + " no se puede armar por piezas", { kind: "error" });
@@ -84,11 +81,10 @@ registerAction("tools:guide", () => withModel((m) => {
 
 registerAction("view:hud", () => { emit("hud:toggle", {}); refreshMenu(); });
 registerAction("camera:cycle", () => { cycleCamera(); toast("Cambiando de cámara…"); });
-registerAction("tutorial:start", () => { closeMenu(); startTutorial(); });
+registerAction("tutorial:start", () => { closeMenu(); startTutorial("basico"); });
+registerAction("tutorial:pieces", () => { closeMenu(); startTutorial("piezas"); });
 registerAction("calib:open", () => { closeMenu(); startCalibration(); });
 registerAction("app:exit", () => { closeMenu(); emit("app:exit", {}); });
-
-// ---- secciones -------------------------------------------------------------
 
 registerMenuPage("root", {
   title: "Menú",
@@ -134,6 +130,9 @@ registerMenuPage("tools", {
     ui.button({ label: "Armar", action: "tools:assemble" }),
     ui.button({ label: findExplodable() && findExplodable().guide ? "Terminar armado guiado" : "Armado guiado",
       action: "tools:guide", hint: "pieza por pieza, en orden" }),
+    ui.button({ label: "Deshacer última pieza", action: "tools:undo", hint: "la vuelve a sacar" }),
+    ui.button({ label: "Reiniciar piezas", action: "tools:reset-pieces", hold: HOLD_MS,
+      hint: "mantener · todas sueltas otra vez" }),
     ui.button({ label: "Centrar modelo", action: "tools:center" }),
     ui.button({ label: findExplodable() && findExplodable().spinPaused ? "Reanudar giro" : "Detener giro",
       action: "tools:spin", hint: "o palma de \"alto\" quieta" }),
@@ -162,7 +161,7 @@ const GESTURES = [
   ["Pinch en vacío ↔", "derecha desarma · izquierda arma"],
   ["Pinch sobre una pieza", "con el modelo desarmado: sacarla · cerca de su lugar encaja"],
   ["Palma de \"alto\" quieta", "detiene o reanuda el giro del modelo"],
-  ["Palma con los dedos a la cámara", "girar la muñeca = girar el modelo"],
+  ["Palma con los dedos a la cámara", "girar la muñeca = girar el modelo (o palma inclinada, modo Volante en Ajustes)"],
   ["Pinch rápido en el orbe", "abre o cierra este menú · mantener y mover = moverlo"],
   ["Pinch en vacío (rápido)", "cierra este menú"],
   ["Mouse", "arrastrar · rueda escala · Shift+rueda rota"],
@@ -178,6 +177,7 @@ registerMenuPage("help", {
     }),
     ui.note("Teclas: M menú · Esc cerrar · H depuración · C cámara · G grabar · R recargar"),
     ui.button({ label: "Repetir tutorial", action: "tutorial:start" }),
+    ui.button({ label: "Practicar piezas", action: "tutorial:pieces", hint: "desarmar, sacar y encajar · 5 pasos" }),
   ],
 });
 
@@ -194,6 +194,9 @@ registerMenuPage("settings", {
         ? "calibrado · temblor " + settings.calibration.jitterPx + " px · pinch bajo " + settings.calibration.ratioEnter
         : "10 s · ajusta el pinch y el menú a tu mano" }),
     ...(settings.calibration ? [ui.button({ label: "Volver a valores de fábrica", action: "calib:reset" })] : []),
+    ui.section("Girar el modelo con la palma"),
+    ui.choice("palmTurn", [["perilla", "Perilla"], ["volante", "Volante"]]),
+    ui.note("Perilla: dedos hacia la cámara y girar la muñeca. Volante: palma de \"alto\" inclinada a un lado (más estable si la cámara no ve bien la profundidad)."),
     ui.section("Sensibilidad del pinch"),
     ui.choice("pinchSensitivity", [["low", "Baja"], ["normal", "Normal"], ["high", "Alta"]]),
     ui.button({ label: "Cambiar de cámara", action: "camera:cycle" }),

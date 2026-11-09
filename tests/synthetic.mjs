@@ -1,12 +1,5 @@
-// Generador de manos sinteticas. Construye los 21 landmarks de MediaPipe a partir
-// de poses simples (pinch, mano soltando, palma abierta) para crear grabaciones
-// de prueba deterministas. Las grabaciones reales (tecla G) usan el mismo formato.
-//
-// Las poses estan en unidades de "span" (muneca -> nudillo del medio), en
-// coordenadas de pantalla (y hacia abajo), relativas a la muneca. Un tercer valor
-// opcional es la profundidad z (negativa = mas cerca de la camara), como MediaPipe.
 export const VIDEO = { w: 1280, h: 720 };
-export const FRAME_MS = 33; // ~30 fps, como una webcam
+export const FRAME_MS = 33;
 const SPAN_PX = 110;
 
 const BASE = {
@@ -17,7 +10,6 @@ const BASE = {
   18: [0.55, -1.2], 19: [0.6, -1.45], 20: [0.65, -1.65],
 };
 
-// medio, anular y menique recogidos hacia la palma
 const CURLED = {
   10: [0, -1.25], 11: [0.02, -1.0], 12: [0.02, -0.85],
   14: [0.27, -1.2], 15: [0.28, -1.0], 16: [0.27, -0.85],
@@ -25,22 +17,13 @@ const CURLED = {
 };
 
 const POSES = {
-  // indice doblado tocando el pulgar ("OK")
   pinch: { 4: [-0.35, -1.05], 6: [-0.3, -1.3], 7: [-0.35, -1.25], 8: [-0.3, -1.1] },
-  // soltando como una mano real: solo se abre el pulgar (el punto medio salta ~35 px)
   open: { 4: [-0.8, -0.6], 6: [-0.3, -1.3], 7: [-0.35, -1.25], 8: [-0.3, -1.1] },
-  // palma abierta: cuatro dedos estirados y pulgar separado
   palm: { 4: [-0.9, -0.5], 6: [-0.3, -1.35], 7: [-0.33, -1.65], 8: [-0.35, -1.95] },
-  // pinch "cerrado": puntas de pulgar e indice juntas, medio/anular/menique recogidos
   pinch_closed: { 4: [-0.45, -1.0], 6: [-0.3, -1.3], 7: [-0.4, -1.2], 8: [-0.42, -1.05], ...CURLED },
-  // soltando el pinch cerrado: se abre el pulgar, los otros tres siguen recogidos
   open_closed: { 4: [-0.8, -0.6], 6: [-0.3, -1.3], 7: [-0.4, -1.2], 8: [-0.42, -1.05], ...CURLED },
-  // puno: el indice tambien metido en la palma y el pulgar cruzado encima
   fist: { 4: [-0.12, -1.05], 6: [-0.27, -1.2], 7: [-0.2, -0.95], 8: [-0.18, -0.78], ...CURLED },
-  // puno con la punta del pulgar sobre la del indice: solo el corte de f8 lo rechaza
   fist_tight: { 4: [-0.2, -0.85], 6: [-0.27, -1.2], 7: [-0.2, -0.95], 8: [-0.18, -0.78], ...CURLED },
-  // palma "perilla": dedos estirados apuntando a la camara (se ven cortos en la
-  // imagen, pero las puntas estan ~1.8 span mas cerca que la muneca)
   dial: {
     1: [-0.35, -0.15, -0.2], 2: [-0.55, -0.3, -0.45], 3: [-0.65, -0.4, -0.7], 4: [-0.72, -0.45, -0.95],
     5: [-0.38, -0.45, -0.85], 6: [-0.4, -0.5, -1.3], 7: [-0.41, -0.52, -1.6], 8: [-0.42, -0.53, -1.85],
@@ -48,8 +31,6 @@ const POSES = {
     13: [0.12, -0.48, -0.85], 14: [0.13, -0.52, -1.3], 15: [0.13, -0.54, -1.6], 16: [0.13, -0.55, -1.85],
     17: [0.35, -0.42, -0.75], 18: [0.36, -0.45, -1.15], 19: [0.36, -0.47, -1.4], 20: [0.36, -0.48, -1.6],
   },
-  // puno con los nudillos hacia la camara: las puntas estan algo mas cerca que la
-  // muneca, pero los dedos no estan estirados (no es "perilla")
   fist_forward: {
     4: [-0.12, -1.05, -0.5], 5: [-0.25, -1.0, -0.7], 6: [-0.27, -1.2, -0.75], 7: [-0.2, -0.95, -0.7], 8: [-0.18, -0.78, -0.6],
     9: [0, -1.0, -0.7], 13: [0.25, -1.0, -0.65], 17: [0.5, -0.9, -0.55],
@@ -57,25 +38,25 @@ const POSES = {
   },
 };
 
-// Punto de pinch de la pose "pinch" (medio entre 4 y 8) respecto de la muneca.
 const PINCH_POINT = [(-0.35 - 0.3) / 2, (-1.05 - 1.1) / 2];
 
-// Mano cuya pose de pinch caeria en (px, py) de pantalla. roll (grados, horario
-// en pantalla) gira la mano entera alrededor de la muneca, como girar la muneca.
-export function hand(pose, px, py, label = "Right", { roll = 0 } = {}) {
+const POSE_GESTURE = { palm: "Open_Palm", fist: "Closed_Fist", fist_tight: "Closed_Fist", fist_forward: "Closed_Fist" };
+const SPAN_M = 0.09;
+
+export function hand(pose, px, py, label = "Right", { roll = 0, model = false, gesture = null } = {}) {
   const pts = { ...BASE, ...POSES[pose] };
   const wx = px - PINCH_POINT[0] * SPAN_PX, wy = py - PINCH_POINT[1] * SPAN_PX;
   const c = Math.cos(roll * Math.PI / 180), s = Math.sin(roll * Math.PI / 180);
-  const lm = [];
+  const lm = [], wl = [];
   for (let i = 0; i < 21; i++) {
     const [ux0, uy0, uz = 0] = pts[i] || [0, -0.5];
     const ux = ux0 * c - uy0 * s, uy = ux0 * s + uy0 * c;
     const sx = wx + ux * SPAN_PX, sy = wy + uy * SPAN_PX;
-    // pantalla -> landmark normalizado (deshace el espejo de toScreen); z en
-    // unidades del ancho de la imagen, como MediaPipe
     lm.push([+(1 - sx / VIDEO.w).toFixed(5), +(sy / VIDEO.h).toFixed(5), +(uz * SPAN_PX / VIDEO.w).toFixed(5)]);
+    wl.push([+(-ux * SPAN_M).toFixed(5), +(uy * SPAN_M).toFixed(5), +(uz * SPAN_M).toFixed(5)]);
   }
-  return { label, lm };
+  if (!model) return { label, lm };
+  return { label, lm, wl, g: [gesture || POSE_GESTURE[pose] || "None", 0.9] };
 }
 
 export function createTimeline(description) {
@@ -92,7 +73,6 @@ const lerp = (a, b, f) => a + (b - a) * f;
 export function scenarios() {
   const out = {};
 
-  // 1. Agarrar el reactor, arrastrarlo 200 px a la derecha y soltar.
   {
     const tl = createTimeline("pinch sobre el reactor, arrastre +200px, soltar");
     tl.repeat(8, () => [hand("open", 600, 300)]);
@@ -102,7 +82,6 @@ export function scenarios() {
     out.pinch_drag = tl.build();
   }
 
-  // 2. Tap rapido sobre una tarjeta (soltando solo el pulgar) + un pinch lento que NO es tap.
   {
     const tl = createTimeline("tap rapido sobre tarjeta y luego pinch lento (no es tap)");
     tl.repeat(6, () => [hand("open", 300, 200)]);
@@ -117,8 +96,6 @@ export function scenarios() {
     };
   }
 
-  // 3. Dos manos: separar al doble (escala x2) girando 20 grados; soltar una y
-  //    seguir arrastrando con la otra.
   {
     const tl = createTimeline("dos manos: escala x2 + giro 20 grados, luego una mano sigue arrastrando");
     const mid = [640, 360], ang = (20 * Math.PI) / 180;
@@ -140,11 +117,8 @@ export function scenarios() {
     out.two_hand = tl.build();
   }
 
-  // 4. Pinch en vacio + arrastre horizontal = explode; volver a la izquierda = armar
-  //    Luego un pinch en vacio vertical no debe hacer nada.
   {
     const tl = createTimeline("pinch en vacio: +400px explota, -160px arma un poco; vertical no hace nada");
-    // y=590 queda debajo del reactor (su caja llega a y=564): es "vacio".
     tl.repeat(6, () => [hand("open", 200, 590)]);
     tl.repeat(30, (i, n) => [hand("pinch", lerp(200, 600, i / (n - 1)), 590)]);
     tl.repeat(12, (i, n) => [hand("pinch", lerp(600, 440, i / (n - 1)), 590)]);
@@ -155,8 +129,6 @@ export function scenarios() {
     out.explode_drag = tl.build();
   }
 
-  // 5. Robustez: durante un arrastre MediaPipe alterna la etiqueta Left/Right en
-  //    cada frame y pierde la mano 3 frames (100 ms). No debe soltarse el objeto.
   {
     const tl = createTimeline("arrastre con etiqueta Left/Right alternando y 3 frames sin mano");
     tl.repeat(8, () => [hand("open", 600, 300)]);
@@ -169,8 +141,6 @@ export function scenarios() {
     out.hand_swap = tl.build();
   }
 
-  // 6. Palma de "alto" quieta 1.6 s: detiene el giro UNA vez (y ni pinch ni tap).
-  //    Luego se relaja y vuelve 0.6 s: no alcanza para otro disparo.
   {
     const tl = createTimeline("palma de alto quieta: detiene el giro una vez; ningun pinch ni tap");
     tl.repeat(48, () => [hand("palm", 900, 400)]);
@@ -180,8 +150,6 @@ export function scenarios() {
     out.palm = tl.build();
   }
 
-  // 7. Menu (docs/14 paso A): grab RAPIDO sobre el orbe HeyTECHI con temblor de
-  //    +-6 px = click (abre el menu). El orbe esta en (48,216) y mide 128 px.
   {
     const rand = seededJitter(3);
     const tl = createTimeline("grab rapido sobre el orbe con temblor: abre el menu");
@@ -191,8 +159,6 @@ export function scenarios() {
     out.menu_orb_click = tl.build();
   }
 
-  // 8. Menu: MANTENER el grab sobre el orbe (~0.6 s, se "levanta") y moverlo:
-  //    el orbe se mueve y el menu NO se abre.
   {
     const rand = seededJitter(5);
     const tl = createTimeline("mantener grab sobre el orbe y arrastrarlo: se mueve sin abrir el menu");
@@ -204,17 +170,10 @@ export function scenarios() {
     out.menu_orb_drag = tl.build();
   }
 
-  // 9. Menu (docs/14 paso B): abrir el menu y elegir filas con la mano.
-  //    Con la mano ABIERTA el cursor queda (-25, +25) px respecto del punto de
-  //    pinch; al juntar los dedos salta (+25, -25). La mano llega a "Vista" desde
-  //    ABAJO (queda resaltada) y apunta a su parte alta (y=402): al juntar los
-  //    dedos el cursor cae en "Herramientas", fuera incluso de la histeresis, y
-  //    aun asi debe desplegarse Vista (punto de intencion). Luego pulsa
-  //    "Depuracion". Posiciones medidas con el panel en (206,199), 1280x720.
   {
     const rand = seededJitter(9);
-    const J = 25; // salto del cursor al juntar los dedos
-    const aim = (cx, cy) => [cx + J, cy - J]; // punto de pinch para que el cursor abierto quede en (cx, cy)
+    const J = 25;
+    const aim = (cx, cy) => [cx + J, cy - J];
     const tl = createTimeline("abrir menu, desplegar Vista apuntando a su borde alto, pulsar Depuracion");
     const orb = aim(118, 286), below = aim(370, 530), vista = aim(370, 402), debug = aim(380, 597);
     const still = (n, pose, [x, y]) => tl.repeat(n, () => [hand(pose, x + rand(), y + rand())]);
@@ -226,9 +185,6 @@ export function scenarios() {
     out.menu_select = tl.build();
   }
 
-  // 10. Menu (docs/14 paso C, M5): con "Seleccionar dejando el cursor quieto"
-  //     activado, abrir el menu con pinch y luego elegir Vista y Depuracion SIN
-  //     pinch, solo dejando la mano quieta ~1 s (temblor de +-6 px).
   {
     const rand = seededJitter(10);
     const J = 25;
@@ -244,10 +200,6 @@ export function scenarios() {
     out.menu_dwell = tl.build();
   }
 
-  // 11. Calibracion (docs/14 paso D): el protocolo del asistente con valores
-  //     CONOCIDOS para verificar que el analisis los recupera. Mano abierta:
-  //     ratio 0.707; pinch: 0.071; salto del cursor al juntar los dedos: 35 px;
-  //     temblor uniforme de +-3 px.
   {
     const rand = seededJitter(11, 3);
     const tl = createTimeline("calibracion: 3 s abierta y quieta, 2 s en pinch, 4 pinch y soltar");
@@ -260,8 +212,6 @@ export function scenarios() {
     out.calibration = tl.build();
   }
 
-  // 12. Pinch "cerrado" (medio, anular y menique abajo): agarra el reactor y lo
-  //     arrastra +200 px igual que el pinch OK.
   {
     const tl = createTimeline("pinch con los otros tres dedos recogidos: agarra y arrastra +200px");
     tl.repeat(8, () => [hand("open_closed", 600, 300)]);
@@ -271,8 +221,6 @@ export function scenarios() {
     out.pinch_closed = tl.build();
   }
 
-  // 13. Empieza con pinch OK y a mitad del arrastre recoge los otros tres dedos:
-  //     NO debe soltarse.
   {
     const tl = createTimeline("pinch OK que se cierra a mitad del arrastre: no se suelta");
     tl.repeat(8, () => [hand("open", 600, 300)]);
@@ -283,8 +231,6 @@ export function scenarios() {
     out.pinch_mixed = tl.build();
   }
 
-  // 14. Prueba negativa: un puno (y un puno apretado con el pulgar sobre la punta
-  //     del indice) que pasa sobre el reactor no es pinch.
   {
     const tl = createTimeline("puno moviendose sobre el reactor: no debe agarrar nada");
     tl.repeat(30, (i, n) => [hand("fist", lerp(500, 800, i / (n - 1)), 300)]);
@@ -293,8 +239,6 @@ export function scenarios() {
     out.fist = tl.build();
   }
 
-  // 15. Palma de "alto" (fase 7B): moviendose no dispara; quieta 1 s detiene el
-  //     giro; se baja la mano y otra vez quieta 1 s lo reanuda.
   {
     const rand = seededJitter(15, 4);
     const tl = createTimeline("palma de alto: moviendose nada; quieta detiene; otra vez reanuda");
@@ -307,8 +251,6 @@ export function scenarios() {
     out.palm_stop = tl.build();
   }
 
-  // 16. Palma "perilla": dedos hacia la camara y girar la muneca +40 grados
-  //     (horario) gira el modelo; ningun pinch.
   {
     const rand = seededJitter(16, 3);
     const tl = createTimeline("palma perilla: girar la muneca 40 grados gira el modelo");
@@ -320,8 +262,6 @@ export function scenarios() {
     out.palm_dial = tl.build();
   }
 
-  // 17. Pruebas negativas de palma: soltar un pinch abriendo la mano 0.8 s y un
-  //     puno con los nudillos hacia la camara no son gestos de palma.
   {
     const tl = createTimeline("soltar un pinch abriendo la mano y puno hacia la camara: ninguna palma");
     tl.repeat(8, () => [hand("open", 300, 600)]);
@@ -332,10 +272,41 @@ export function scenarios() {
     out.palm_negative = tl.build();
   }
 
+  {
+    const rand = seededJitter(18, 4);
+    const tl = createTimeline("modelo: palma quieta detiene; palma que el modelo NO ve abierta no detiene");
+    tl.repeat(8, () => [hand("open", 700, 300, "Right", { model: true })]);
+    tl.repeat(30, () => [hand("palm", 700 + rand(), 300 + rand(), "Right", { model: true })]);
+    tl.repeat(8, () => [hand("open", 700, 300, "Right", { model: true })]);
+    tl.repeat(30, () => [hand("palm", 700 + rand(), 300 + rand(), "Right", { model: true, gesture: "None" })]);
+    tl.repeat(8, () => [hand("open", 700, 300, "Right", { model: true })]);
+    out.model_palm = tl.build();
+  }
+  {
+    const rand = seededJitter(19, 3);
+    const tl = createTimeline("modelo + metros: perilla 40 grados; puno hacia la camara no es perilla");
+    tl.repeat(8, () => [hand("open", 640, 330, "Right", { model: true })]);
+    tl.repeat(10, () => [hand("dial", 640 + rand(), 330 + rand(), "Right", { model: true })]);
+    tl.repeat(30, (i, n) => [hand("dial", 640 + rand(), 330 + rand(), "Right", { model: true, roll: lerp(0, 40, i / (n - 1)) })]);
+    tl.repeat(10, () => [hand("dial", 640 + rand(), 330 + rand(), "Right", { model: true, roll: 40 })]);
+    tl.repeat(10, () => [hand("open", 640, 330, "Right", { model: true })]);
+    tl.repeat(40, () => [hand("fist_forward", 640, 330, "Right", { model: true })]);
+    out.model_dial = tl.build();
+  }
+  {
+    const rand = seededJitter(20, 3);
+    const tl = createTimeline("volante: palma de alto inclinada 40 grados gira el modelo y no lo detiene");
+    tl.repeat(8, () => [hand("open", 700, 300, "Right", { model: true })]);
+    tl.repeat(6, () => [hand("palm", 700 + rand(), 300 + rand(), "Right", { model: true })]);
+    tl.repeat(24, (i, n) => [hand("palm", 700 + rand(), 300 + rand(), "Right", { model: true, roll: lerp(0, 40, i / (n - 1)) })]);
+    tl.repeat(10, () => [hand("palm", 700 + rand(), 300 + rand(), "Right", { model: true, roll: 40 })]);
+    tl.repeat(10, () => [hand("open", 700, 300, "Right", { model: true })]);
+    out.model_volante = tl.build();
+  }
+
   return out;
 }
 
-// Temblor determinista de +-6 px (mano real sostenida en el aire).
 function seededJitter(seed, amp = 6) {
   let s = seed >>> 0;
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return (s / 4294967296 * 2 - 1) * amp; };

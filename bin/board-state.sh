@@ -1,9 +1,4 @@
 #!/bin/sh
-# Lee /state y lo traduce a una descripcion textual. Son los ojos de una IA
-# sobre el tablero.
-#
-# Uso:
-#   bin/board-state.sh
 set -eu
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)

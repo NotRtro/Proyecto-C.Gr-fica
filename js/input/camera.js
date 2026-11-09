@@ -15,14 +15,14 @@ export async function openCamera() {
       const match = devices.find(
         (d) => d.kind === "videoinput" && d.label.toLowerCase().includes(camQuery.toLowerCase()));
       if (match) constraints.video.deviceId = { exact: match.deviceId };
-    } catch (e) { /* enumerateDevices puede fallar sin permiso previo; se ignora */ }
+    } catch (e) { }
   }
   const stream = await navigator.mediaDevices.getUserMedia(constraints);
   video.srcObject = stream;
   await video.play();
   try {
     camDevices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
-  } catch (e) { /* no critico */ }
+  } catch (e) { }
 }
 
 export async function cycleCamera() {

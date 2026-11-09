@@ -1,5 +1,3 @@
-// Indicador del armado guiado (fase 7E): "Paso 3 de 16 · Rueda trasera izquierda".
-// Solo informa: no tapa la escena (sin data-ui y sin eventos de puntero).
 import { on } from "../core/bus.js";
 import { toast } from "./feedback.js";
 
@@ -36,7 +34,6 @@ on("guide:end", ({ done }) => {
   if (!done) toast("Armado guiado terminado");
 });
 
-// Una pieza soltada junto a su lugar pero fuera de turno.
 on("piece:drop", ({ wrong, label, expected }) => {
   if (wrong) toast(label + " todavía no: ahora va " + expected, { kind: "error", ms: 2400 });
 });

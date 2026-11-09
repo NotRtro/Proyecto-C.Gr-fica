@@ -1,18 +1,3 @@
-// Calibracion de la mano del usuario (docs/14, paso D). Pura: recibe muestras y
-// devuelve medidas + umbrales sugeridos. La usan el asistente de la app
-// (js/ui/calibration.js) y la herramienta de consola (tests/calibrate.mjs).
-//
-// Muestra: { t (ms), x, y (cursor en px, el mismo que usa la interfaz), ratio
-//            (separacion pulgar-indice / tamano de mano), span (px) }
-//
-// No necesita saber en que paso estaba el usuario: separa sola la mano ABIERTA de
-// la mano en PINCH por su "ratio" (umbral de Otsu), y de ahi mide:
-//   temblor   RMS del cursor en el segundo mas quieto con la mano abierta
-//   ratios    mediana abierta y mediana en pinch (de la mano de ESTE usuario)
-//   salto     cuanto se mueve el cursor al juntar los dedos (mediana)
-// y sugiere: cortes de ratio del pinch, histeresis del menu y recorrido minimo de
-// un click.
-
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const median = (a) => {
   if (!a.length) return NaN;
@@ -21,7 +6,6 @@ const median = (a) => {
 };
 const mean = (a) => a.reduce((p, q) => p + q, 0) / a.length;
 
-// Umbral de Otsu en 1D: el corte que mejor separa dos grupos de valores.
 export function otsuSplit(values) {
   const s = [...values].sort((a, b) => a - b);
   let best = s[0], bestVar = -1;
@@ -37,8 +21,6 @@ export function otsuSplit(values) {
   return best;
 }
 
-// Tramos CONTINUOS de mano abierta (sin pinch ni huecos de mas de gapMs en el
-// medio). Juntar muestras de momentos distintos armaria una "quietud" falsa.
 function openRuns(valid, isPinch, gapMs = 150) {
   const runs = [];
   let run = [];
@@ -51,8 +33,6 @@ function openRuns(valid, isPinch, gapMs = 150) {
   return runs;
 }
 
-// RMS de la distancia al centro, en la ventana de windowMs mas quieta dentro de
-// un tramo continuo de mano abierta.
 function stillestJitter(runs, windowMs) {
   let best = Infinity;
   for (const open of runs) {
@@ -82,8 +62,6 @@ export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
   }
   const ratioOpen = median(open.map((s) => s.ratio));
   const ratioPinch = median(pinch.map((s) => s.ratio));
-  // En un pinch de verdad los dedos casi se tocan: si el grupo "cerrado" no baja
-  // de 0.3, lo que hubo fueron dos formas de mano abierta, no un pinch.
   if (ratioPinch > 0.3) {
     return { ok: false, reason: "No se detecto un pinch: junta el pulgar y el indice hasta que se toquen.", warnings };
   }
@@ -96,9 +74,6 @@ export function analyzeHand(samples, { stillWindowMs = 1000 } = {}) {
     return { ok: false, reason: "No hubo 1 segundo seguido con la mano abierta y quieta.", warnings };
   }
 
-  // Salto del cursor en cada transicion abierta -> pinch: promedio de 3 muestras
-  // antes contra 3 muestras despues (saltando la primera: el pinch se confirma
-  // un par de frames despues de juntar los dedos).
   const jumps = [];
   for (let i = 3; i < valid.length - 4; i++) {
     if (!isPinch(valid[i - 1]) && isPinch(valid[i])) {

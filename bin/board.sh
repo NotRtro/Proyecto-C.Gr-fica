@@ -1,8 +1,4 @@
 #!/bin/sh
-# Envia un comando JSON a /cmd. Es la mano de una IA sobre el tablero.
-#
-# Uso:
-#   bin/board.sh '{"a":"add_card","title":"IDEA","body":"texto"}'
 set -eu
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)

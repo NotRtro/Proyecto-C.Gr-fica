@@ -1,5 +1,3 @@
-// Render page (?role=render) para OBS: sin camara ni MediaPipe. Lee /state cada
-// frame y reconstruye la escena localmente con fondo transparente.
 import { HIDE_CURSORS, RFLIP } from "../core/env.js";
 import { FOLLOW_LERP } from "../core/config.js";
 import { getItemType, stageLayer, applyTransform } from "../items/registry.js";
@@ -9,10 +7,8 @@ const DEFAULT_RING = { state: "idle", mood: "green", wave: [], name: "Assistant"
 const renderItems = {};
 const renderCursors = {};
 
-// Ley de espejo: el tracker ve self-view espejado; la audiencia no.
 function rxFrac(f) { return RFLIP ? 1 - f : f; }
 
-// Tipos desconocidos caen al anillo, igual que antes de la fase 3.
 function typeFor(type) { return getItemType(type) || getItemType("widget"); }
 
 function createRenderItem(def) {
@@ -26,7 +22,7 @@ function createRenderItem(def) {
 }
 
 function reconcileItems(list, ring, view) {
-  const env = { now: performance.now(), ring, view };
+  const env = { now: performance.now(), ring, view, mirror: RFLIP };
   const seen = new Set();
   for (const def of list) {
     seen.add(def.id);
@@ -78,7 +74,7 @@ async function renderLoop() {
     const st = await fetch("/state", { cache: "no-store" }).then((r) => r.json());
     reconcileItems(st.items || [], st.ring || DEFAULT_RING, st.view || {});
     if (!HIDE_CURSORS) reconcileCursors(st.cursors || {});
-  } catch (e) { /* servidor no disponible; se reintenta el siguiente frame */ }
+  } catch (e) { }
   requestAnimationFrame(renderLoop);
 }
 

@@ -1,11 +1,3 @@
-// Tracker: camara (o grabacion) + gestos + escena + interfaz. Es la pagina
-// "real" que usa el operador (sin ?role=render).
-//
-// Teclas: M menu, Esc cerrar menu, R recargar, C cambiar camara, H overlay de
-// debug, G grabar/detener (al detener se descarga un .json para tests/recordings/).
-// ?replay=<nombre> reproduce tests/recordings/<nombre>.json en lugar de la camara;
-// con &step=1 lo hace cuadro a cuadro con el tiempo de la grabacion (pruebas).
-// ?calibrar=1 abre directamente el asistente "Calibrar mis manos".
 import { Q } from "../core/env.js";
 import { store } from "../core/store.js";
 import { on } from "../core/bus.js";
@@ -33,6 +25,8 @@ import { updatePartHover } from "../ui/partHover.js";
 import "../ui/guide.js";
 
 const MEDIAPIPE_VERSION = "0.10.14";
+const GESTURE_MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task";
 const HAND_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
 
@@ -72,9 +66,12 @@ function updateHud() {
       + " ratio=" + f2(m.ratio) + " arch=" + f2(m.arch) + " back=" + f2(m.backMean)
       + " indice=" + f2(m.f8) + " forma=" + (m.kind || "-"));
     const pm = m.palm || {};
-    lines.push("    palma=" + ((h.palm && h.palm.pose) || "-") + " dedos2D=" + f2(pm.ext2) + " dedos3D=" + f2(pm.ext3)
-      + " prof=" + f2(pm.depth) + " incl=" + Math.round((pm.tilt || 0) * 57.3) + "°"
-      + (h.palm ? " ang=" + Math.round(h.palm.angle * 57.3) + "°" : ""));
+    const w = pm.world;
+    lines.push("    palma=" + ((h.palm && h.palm.pose) || "-") + " fuerza=" + f2(h.pinchStrength)
+      + " incl=" + Math.round((pm.tilt || 0) * 57.3) + "°"
+      + (h.palm ? " ang=" + Math.round(h.palm.angle * 57.3) + "°" : "")
+      + (m.model ? " modelo=" + m.model.name + " " + f2(m.model.score) : " modelo=-")
+      + (w ? " rectos=" + f2(w.straight) + " haciaCam=" + f2(w.axis) : " dedos2D=" + f2(pm.ext2) + " prof=" + f2(pm.depth)));
   }
   lines.push("", "M menu  H debug  C camara  G grabar  R recargar",
     "mouse: arrastrar, rueda=escala, Shift+rueda=rotar");
@@ -106,9 +103,6 @@ function onKeyDown(e) {
   else if (k === "h") toggleHud();
 }
 
-// Devuelve detecciones solo si hay un frame NUEVO (la camara va a ~30 fps y la
-// pantalla a ~60: repetir la deteccion sobre el mismo frame gasta CPU y ademas
-// contaria doble los frames de confirmacion del pinch).
 function readDetections(now) {
   if (replay) {
     const d = replay.next(now);
@@ -119,10 +113,12 @@ function readDetections(now) {
   if (!store.landmarker || video.readyState < 2 || video.currentTime === lastVideoTime) return null;
   lastVideoTime = video.currentTime;
   lastVideo = video;
-  return detectionsFromMediaPipe(store.landmarker.detectForVideo(video, now));
+  const res = store.landmarker.recognizeForVideo
+    ? store.landmarker.recognizeForVideo(video, now)
+    : store.landmarker.detectForVideo(video, now);
+  return detectionsFromMediaPipe(res);
 }
 
-// Progreso que muestra el anillo de cada cursor: boton "mantener" o levantar el orbe.
 function cursorProgress(h) {
   const palm = h.palm && h.palm.pose === "stop" && h.palm.progress > PALM.SHOW_FROM ? h.palm.progress : 0;
   return Math.max(holdProgressOf(h.id), palm);
@@ -135,14 +131,11 @@ function frame(now) {
   fps = fps * 0.9 + (dt > 0 ? 0.1 / dt : 0);
 
   const detections = readDetections(now);
-  // Tiempo de gestos e interfaz: el real, o el de la grabacion en replay cuadro a cuadro.
   const tIn = replay ? replay.clock(now) : now;
   if (detections && recorder.active()) {
     recorder.push(detections, now);
     setBadge("● REC " + recorder.frames());
   }
-  // store.hands = manos de la camara + el mouse (si se uso). La interfaz y el
-  // tutorial tratan a ambos igual; sync.js y los cursores ignoran el mouse.
   const mouseStates = mouse.used() ? [mouse.state()] : [];
   store.hands = input.step({
     detections, video: lastVideo, now: tIn, view: currentView(), extra: mouseStates,
@@ -162,8 +155,6 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-// "Salir": apaga la camara y el detector, libera la escena (WebGL incluido) y
-// publica una escena vacia para que OBS no se quede con la ultima imagen.
 async function shutdown() {
   if (!running) return;
   running = false;
@@ -171,7 +162,7 @@ async function shutdown() {
   const video = videoEl();
   if (video.srcObject) { video.srcObject.getTracks().forEach((t) => t.stop()); video.srcObject = null; }
   if (store.landmarker && store.landmarker.close) {
-    try { store.landmarker.close(); } catch (e) { /* ya estaba cerrado */ }
+    try { store.landmarker.close(); } catch (e) { }
   }
   store.landmarker = null;
   input.reset();
@@ -188,19 +179,17 @@ async function shutdown() {
 
 async function loadHandLandmarker() {
   const base = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@" + MEDIAPIPE_VERSION;
-  const { FilesetResolver, HandLandmarker } = await import(base + "/vision_bundle.mjs");
+  const { FilesetResolver, GestureRecognizer, HandLandmarker } = await import(base + "/vision_bundle.mjs");
   const vision = await FilesetResolver.forVisionTasks(base + "/wasm");
-  return HandLandmarker.createFromOptions(vision, {
-    baseOptions: { modelAssetPath: HAND_MODEL_URL },
-    runningMode: "VIDEO",
-    numHands: 2,
-    minHandDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-  });
+  const common = { runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.5, minTrackingConfidence: 0.5 };
+  try {
+    return await GestureRecognizer.createFromOptions(vision, { baseOptions: { modelAssetPath: GESTURE_MODEL_URL }, ...common });
+  } catch (e) {
+    console.warn("[manos] GestureRecognizer no cargo; uso HandLandmarker", e);
+    return HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: HAND_MODEL_URL }, ...common });
+  }
 }
 
-// Los errores se muestran como avisos fijos que NO tapan la pantalla: el mouse y
-// el menu siguen funcionando sin camara.
 async function startCamera() {
   const loading = toast("Cargando detector de manos…", { ms: 0 });
   try {
@@ -233,13 +222,10 @@ async function startReplay() {
 }
 
 export async function bootTracker() {
-  // Escena, interfaz y loop arrancan YA: mientras MediaPipe carga (unos segundos)
-  // o si la camara falla, el mouse y el menu funcionan igual.
   spawnStage();
   mountMenu();
   on("hud:toggle", toggleHud);
   on("app:exit", shutdown);
-  // Confirmacion de cada pulsacion de la interfaz: pulso del cursor y click sonoro.
   on("palm:stop", ({ hand, item, paused }) => {
     pulseCursor(hand);
     if (!settings.autoSpin) toast("El giro automático está apagado (Menú › Vista)");
@@ -253,7 +239,7 @@ export async function bootTracker() {
   requestAnimationFrame(frame);
 
   await loadConfig();
-  refreshCatalog(); // nombres del catalogo 3D disponibles desde el inicio
+  refreshCatalog();
   const calibrateNow = Q.get("calibrar") === "1";
   if (calibrateNow) startCalibration();
   if (REPLAY) await startReplay();

@@ -29,7 +29,6 @@ def _resolucion_pedida(por_defecto=(640, 480)):
 W, H = _resolucion_pedida()
 
 def crear_detector_manos(w, h):
-    # crea el detector dentro del hilo de seguimiento
     import mediapipe as mp
     from mediapipe.tasks import python as mpp
     from mediapipe.tasks.python import vision as mpv

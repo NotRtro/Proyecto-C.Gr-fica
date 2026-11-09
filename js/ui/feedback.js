@@ -1,5 +1,3 @@
-// Avisos no bloqueantes (toasts) y pantalla de fin de sesion.
-
 function toastLayer() {
   let el = document.getElementById("toasts");
   if (!el) {
@@ -10,7 +8,6 @@ function toastLayer() {
   return el;
 }
 
-// kind: "info" | "error". ms = 0 deja el aviso fijo (p. ej. "sin camara").
 export function toast(text, { ms = 2600, kind = "info" } = {}) {
   const el = document.createElement("div");
   el.className = "toast " + kind;
@@ -26,8 +23,6 @@ export function toast(text, { ms = 2600, kind = "info" } = {}) {
   return el;
 }
 
-// Se muestra tras "Salir": la camara ya esta apagada y el loop detenido, asi que
-// este boton usa un click nativo del mouse (no hay gestos).
 export function showEndScreen() {
   const el = document.createElement("div");
   el.id = "endscreen";
@@ -39,10 +34,6 @@ export function showEndScreen() {
   document.body.appendChild(el);
 }
 
-// Click sonoro corto (docs/14 M7), sin archivos de audio: un "blip" de 25 ms
-// generado con WebAudio. Solo suena si esta activado en Ajustes. Nota: los
-// navegadores no permiten audio hasta que hubo una interaccion REAL (tecla o
-// click del mouse); con solo gestos de mano puede quedar en silencio hasta entonces.
 let audio = null;
 export function playClick() {
   try {
@@ -59,5 +50,5 @@ export function playClick() {
     osc.connect(gain).connect(audio.destination);
     osc.start(t);
     osc.stop(t + 0.035);
-  } catch (e) { /* sin audio disponible: se ignora */ }
+  } catch (e) { }
 }

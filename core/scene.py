@@ -60,7 +60,6 @@ class Scene:
         self.hand_depth = 0.0
 
     def apply_gestures(self, hands: list[HandFeatures], dt: float):
-        # convierte los gestos detectados en transformaciones del objeto
         K = self.camera.intrinsics()
         fx, cx, cy = K[0, 0], K[0, 2], K[1, 2]
         primary = hands[0] if hands else None
@@ -127,7 +126,6 @@ class Scene:
         return (T @ Ry @ Rx @ S).astype("f4")
 
     def render(self, rgb_frame, hands, t, target_fbo=None):
-        # combina la camara, la oclusion, el objeto y el posprocesado
         ctx = self.ctx
         w, h = self.size
         self.post.scene_fbo.use()

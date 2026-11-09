@@ -1,13 +1,3 @@
-// Asistente "Calibrar mis manos" (docs/14, paso D). Mide la mano REAL del usuario
-// en ~10 s y personaliza los umbrales (se guardan en las preferencias de este
-// navegador y se aplican en js/core/settings.js). El analisis es puro y tiene
-// tests: js/input/calibration.js.
-//
-// Pasos (el tiempo solo corre mientras se ve una mano):
-//   1. mano abierta y quieta (temblor del cursor, ratio abierto)
-//   2. pinch sostenido       (ratio en pinch)
-//   3. pinch y soltar x4     (salto del cursor al juntar los dedos)
-// Durante la calibracion la escena queda bloqueada: los pinch no agarran nada.
 import { registerAction } from "./actions.js";
 import { toast } from "./feedback.js";
 import { setSetting } from "../core/settings.js";
@@ -22,7 +12,7 @@ const STEPS = [
 
 let card = null;
 let step = -1;
-let elapsed = 0;      // ms con mano visible en el paso actual
+let elapsed = 0;
 let lastT = null;
 let samples = [];
 let result = null;
@@ -41,9 +31,6 @@ function button(label, action, primary) {
   return b;
 }
 
-// La tarjeta de cada paso se arma UNA vez; en cada frame solo cambian la barra y
-// el texto (si se re-creara, el boton Cancelar cambiaria de nodo y un pinch sobre
-// el nunca se completaria).
 let view = null;
 
 function buildStep() {
@@ -107,7 +94,6 @@ export function startCalibration() {
   updateStep(false);
 }
 
-// Llamar una vez por frame con los estados de mano y el reloj de gestos.
 export function updateCalibration(hands, now) {
   if (!card || step < 0) return;
   const dt = lastT === null ? 0 : Math.min(now - lastT, 100);

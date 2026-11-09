@@ -1,25 +1,8 @@
-// Piezas de un modelo GLB en three.js (fase 7): construirlas, ubicarlas,
-// apuntarlas, arrastrarlas y encajarlas. La logica que decide (que es una pieza,
-// agrupado por manifest, iman) es pura y vive en js/three/pieces.js.
-//
-// ESPACIO DEL MODELO: el del grupo `view.group` (modelo ya centrado, antes de su
-// escala y giro). Ahi se guardan el centro de cada pieza, su desplazamiento de
-// desarmado (off) y el que le da el usuario al arrastrarla (user). Cada nodo lo
-// pasa a su espacio local con la parte 3x3 de la inversa de la matriz de su padre.
-//
-// Posicion de una pieza = su lugar original + desplazamiento, donde el
-// desplazamiento es:
-//   encajada (placed)  0 (con una animacion corta desde donde se solto)
-//   suelta             off x avance del desarmado + user
 import * as THREE from "three";
 import { PIECES } from "../core/config.js";
 import { explodePlan, partFactor } from "./explodePlan.js";
 import { findPieces, prettyName, groupPieces, screenToNdc, screenToNdcClamped, shouldSnap } from "./pieces.js";
 
-// Arbol de nodos del glTF para findPieces. GLTFLoader registra en
-// parser.associations que objeto vino de que nodo/malla; las primitivas de una
-// malla con varios materiales son hijos del objeto del nodo pero NO son nodos.
-// Sin associations (otro cargador) cada objeto cuenta como nodo.
 function nodeTree(root, parser) {
   const assoc = parser && parser.associations;
   const info = (o) => (assoc ? assoc.get(o) : null);
@@ -28,7 +11,7 @@ function nodeTree(root, parser) {
   const nameOf = (o) => {
     const a = info(o);
     const def = a && a.nodes !== undefined && parser.json.nodes ? parser.json.nodes[a.nodes] : null;
-    return def && def.name ? def.name : o.name; // el nombre crudo (GLTFLoader lo "sanea")
+    return def && def.name ? def.name : o.name;
   };
   function build(o) {
     const children = [];
@@ -46,12 +29,10 @@ function nodeTree(root, parser) {
 
 const inv3Of = (m4) => new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().copy(m4).invert());
 
-// obj: escena del glTF ya centrada (sus matrices de mundo = espacio del modelo).
-// Llena view.parts y view.meshPiece (malla -> indice de pieza).
 export function buildPieces(view, obj, parser, diag, manifest) {
   let skinned = false;
   obj.traverse((n) => { if (n.isSkinnedMesh) skinned = true; });
-  const auto = skinned ? [] : findPieces(nodeTree(obj, parser)); // los personajes no se desarman
+  const auto = skinned ? [] : findPieces(nodeTree(obj, parser));
   const groups = groupPieces(auto.length, manifest);
   const boxes = groups.map((g) => {
     const b = new THREE.Box3();
@@ -80,48 +61,45 @@ export function buildPieces(view, obj, parser, diag, manifest) {
     };
   });
   view.drags = new Map();
+  view.placedOrder = [];
   return { skinned };
 }
 
-// ---- ubicar ----------------------------------------------------------------
-
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
 
-// f: avance del desarmado (0 armado .. 1 desarmado). dt en segundos.
 export function applyPieces(view, f, dt) {
   for (const p of view.parts) {
     if (p.snap) {
       p.snap.t = Math.min(1, p.snap.t + (dt * 1000) / PIECES.SNAP_MS);
-      const e = 1 - (1 - p.snap.t) ** 3; // ease-out
+      const e = 1 - (1 - p.snap.t) ** 3;
       p.disp.copy(p.snap.from).multiplyScalar(1 - e);
       if (p.snap.t >= 1) p.snap = null;
     } else if (p.placed) {
       p.disp.set(0, 0, 0);
     } else {
+      if (p.returning) {
+        p.user.multiplyScalar(Math.exp(-PIECES.RELAX_RATE * dt));
+        if (p.user.lengthSq() < 1e-8) { p.user.set(0, 0, 0); p.returning = false; }
+      }
       p.disp.copy(p.off).multiplyScalar(partFactor(f, p.lag)).add(p.user);
     }
     for (const n of p.nodes) n.node.position.copy(n.home).add(tmp.copy(p.disp).applyMatrix3(n.inv3));
   }
 }
 
-// Al armar (gesto, Herramientas o comando) las piezas sacadas vuelven solas y,
-// ya armado, se olvida que piezas estaban encajadas.
 export function relaxPieces(view, dt, assembled) {
   const k = Math.exp(-PIECES.RELAX_RATE * dt);
   for (const p of view.parts) {
     p.user.multiplyScalar(k);
-    if (assembled) { p.user.set(0, 0, 0); p.placed = false; p.snap = null; }
+    if (assembled) { p.user.set(0, 0, 0); p.placed = false; p.snap = null; p.returning = false; }
   }
+  if (assembled) view.placedOrder = [];
 }
 
 export function placedCount(view) { return view.parts.filter((p) => p.placed).length; }
 
-// ---- apuntar (raycast) -----------------------------------------------------
-
 const raycaster = new THREE.Raycaster();
 
-// Indice de la pieza bajo (x, y) de pantalla; -1 si toca una malla que no es
-// pieza; null si no toca el modelo.
 export function pickPiece(view, x, y) {
   const ndc = screenToNdc(view.canvas.getBoundingClientRect(), x, y);
   if (!ndc) return null;
@@ -135,17 +113,13 @@ export function pickPiece(view, x, y) {
   return null;
 }
 
-// ---- copias superpuestas: resaltado y silueta fantasma ----------------------
-
 function overlayMesh(geometry, material) {
   const o = new THREE.Mesh(geometry, material);
-  o.userData.overlay = true; // no es parte del modelo: ni raycast ni cambio de material
+  o.userData.overlay = true;
   o.raycast = () => {};
   return o;
 }
 
-// Resaltado: una copia translucida de cada malla de la pieza, hija de la malla
-// (sigue sus movimientos).
 export function setHighlight(view, index) {
   if (view.hl === index) return;
   for (const o of view.hlMeshes) o.removeFromParent();
@@ -161,8 +135,6 @@ export function setHighlight(view, index) {
   }
 }
 
-// Silueta en el lugar original de la pieza: copias fijas, hijas del padre de
-// cada nodo, con la matriz que tendria la malla con el nodo en su lugar.
 function addGhost(view, p) {
   const ghost = [];
   view.scene.updateMatrixWorld();
@@ -182,7 +154,6 @@ function addGhost(view, p) {
   return ghost;
 }
 
-// Armado guiado: la pieza que toca brilla (ambar) y su lugar se ve como silueta.
 export function setHint(view, index) {
   if (view.hint === index) return;
   for (const o of view.hintMeshes) o.removeFromParent();
@@ -199,13 +170,30 @@ export function setHint(view, index) {
   view.hintMeshes.push(...addGhost(view, p));
 }
 
-// Todas las piezas vuelven al desarmado normal (empezar un armado desde cero).
-export function resetPieces(view) {
-  cancelDrags(view);
-  for (const p of view.parts) { p.user.set(0, 0, 0); p.placed = false; p.snap = null; }
+export function unplacePiece(view, i, f) {
+  const p = view.parts[i];
+  if (!p) return;
+  p.user.copy(p.disp).sub(tmp.copy(p.off).multiplyScalar(partFactor(f, p.lag)));
+  p.placed = false; p.snap = null; p.returning = true;
 }
 
-// ---- arrastrar y encajar ----------------------------------------------------
+export function resetPieces(view, f = 1) {
+  cancelDrags(view);
+  view.parts.forEach((p, i) => unplacePiece(view, i, f));
+  view.placedOrder = [];
+}
+
+export function snapPiece(view, i) {
+  const p = view.parts[i];
+  if (!p || p.placed) return false;
+  for (const [key, d] of view.drags) if (d.i === i) endDrag(view, key, () => false);
+  p.placed = true;
+  p.snap = { from: p.disp.clone(), t: 0 };
+  p.user.set(0, 0, 0);
+  p.returning = false;
+  view.placedOrder.push(i);
+  return true;
+}
 
 function hitPlane(view, x, y, plane) {
   const ndc = screenToNdcClamped(view.canvas.getBoundingClientRect(), x, y, PIECES.DRAG_EDGE);
@@ -220,9 +208,6 @@ export function isDragged(view, i) {
   return false;
 }
 
-// Toma la pieza i con la mano `key` en (x, y). La pieza se mueve en el plano
-// paralelo a la pantalla que pasa por su centro (la profundidad no cambia).
-// f: avance actual del desarmado.
 export function beginDrag(view, i, key, x, y, f) {
   const p = view.parts[i];
   if (!p || isDragged(view, i)) return false;
@@ -232,10 +217,9 @@ export function beginDrag(view, i, key, x, y, f) {
   const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, c);
   const h0 = hitPlane(view, x, y, plane);
   if (!h0) return false;
-  // La pieza sigue donde se ve: su desplazamiento actual pasa a ser del usuario.
   p.user.copy(p.disp).sub(tmp.copy(p.off).multiplyScalar(partFactor(f, p.lag)));
-  p.placed = false; p.snap = null;
-  // (si la pieza es la pista del armado guiado, su silueta ya esta a la vista)
+  p.placed = false; p.snap = null; p.returning = false;
+  view.placedOrder = view.placedOrder.filter((j) => j !== i);
   view.drags.set(key, { i, plane, h0, user0: p.user.clone(), ghost: view.hint === i ? [] : addGhost(view, p) });
   return true;
 }
@@ -249,10 +233,6 @@ export function moveDrag(view, key, x, y) {
   view.parts[d.i].user.copy(d.user0).add(h.sub(d.h0).applyMatrix3(toModel));
 }
 
-// Suelta la pieza. Si queda cerca (en pantalla) de su lugar original, encaja.
-// canSnap(i): permite que el armado guiado solo deje encajar la pieza que toca.
-// Devuelve { i, snapped, near } o null (near: estaba cerca de su lugar, haya
-// encajado o no).
 export function endDrag(view, key, canSnap = () => true) {
   const d = view.drags.get(key);
   if (!d) return null;
@@ -271,6 +251,8 @@ export function endDrag(view, key, canSnap = () => true) {
     p.placed = true;
     p.snap = { from: p.disp.clone(), t: 0 };
     p.user.set(0, 0, 0);
+    p.returning = false;
+    view.placedOrder.push(d.i);
   }
   return { i: d.i, snapped, near };
 }
@@ -279,11 +261,8 @@ export function cancelDrags(view) {
   for (const key of [...view.drags.keys()]) endDrag(view, key, () => false);
 }
 
-// ---- OBS: estado de las piezas en /state -------------------------------------
-
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
-// Solo las piezas que se apartan del desarmado normal: [i, ux, uy, uz, encajada].
 export function serializePieces(view) {
   const out = [];
   view.parts.forEach((p, i) => {
@@ -292,7 +271,6 @@ export function serializePieces(view) {
   return out;
 }
 
-// Render page: aplica lo que publica el tracker (con suavizado).
 export function applyRemotePieces(view, list, lerp) {
   const seen = new Set();
   for (const [i, ux, uy, uz, placed] of list || []) {

@@ -1,26 +1,3 @@
-// Modelo 3D del catalogo (GLB / glTF de media/models), fases 6 y 7.
-//
-//   - Se carga perezosamente con GLTFLoader (con Draco y Meshopt); mientras tanto
-//     la tarjeta muestra "Cargando <nombre>...".
-//   - Se centra y escala para que quepa (docs/04: "Centrado y escalado").
-//   - PIEZAS (fase 7, js/three/pieceRig.js): ensambles de la jerarquia del glTF,
-//     agrupables con el manifest del modelo (media/models/<nombre>.json). El
-//     explode las separa; con el modelo desarmado la pieza bajo la mano se apunta
-//     con raycast, se resalta, se arrastra en el plano de la camara y, soltada
-//     cerca de su lugar original, encaja. Todas encajadas = modelo armado.
-//   - ARMADO GUIADO (7E): las piezas se encajan en orden (el del manifest o de la
-//     mas grande a la mas chica); la que toca brilla en ambar y su lugar se ve
-//     como silueta. Una pieza que no toca no encaja.
-//   - El modelo se agarra por su SILUETA: un punto transparente del cuadro no es
-//     el modelo (pick devuelve null).
-//   - Modo "solid" (materiales originales + luz de entorno, docs/04 "Modo solido")
-//     u "holo" (shader holografico, js/three/holoModelMaterial.js). Por defecto se
-//     ve original y solo es holografico si no trae apariencia propia; Menu > Vista
-//     puede forzar holografico. La render page (OBS) usa lo mismo.
-//   - Resolucion adaptativa: al agrandarlo con dos manos se re-dimensiona el canvas
-//     (sin tirones: solo cuando no esta agarrado, con histeresis).
-//
-// Cada modelo tiene su propio renderer WebGL (como el reactor). Limite: MODEL.MAX_IN_SCENE.
 import * as THREE from "three";
 import { registerItemType } from "./registry.js";
 import { HOLO, FOLLOW_LERP, MODEL, PIECES } from "../core/config.js";
@@ -32,11 +9,9 @@ import { manifestPathFor, guideOrder, createGuide, guideExpected, guideCanSnap, 
 import {
   buildPieces, applyPieces, relaxPieces, placedCount, pickPiece, setHighlight, isDragged,
   beginDrag, moveDrag, endDrag, cancelDrags, serializePieces, applyRemotePieces, setHint, resetPieces,
+  unplacePiece, snapPiece,
 } from "../three/pieceRig.js";
 
-// Decodificadores para GLB comprimidos (Draco y Meshopt, muy comunes al optimizar
-// modelos con gltf.report o gltf-transform). Se cargan del mismo CDN que three.js
-// y el WASM de Draco solo se descarga si un modelo lo necesita.
 const DRACO_PATH = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/";
 
 let loaderPromise = null;
@@ -66,8 +41,6 @@ function roomEnvironment() {
   return roomEnvPromise;
 }
 
-// Manifest opcional del modelo (nombres, grupos y orden de las piezas). Lo leen
-// igual el tracker y la render page, asi las piezas coinciden en OBS.
 async function loadManifest(src) {
   try {
     const res = await fetch("/media/" + manifestPathFor(src), { cache: "no-store" });
@@ -75,7 +48,7 @@ async function loadManifest(src) {
     const data = await res.json();
     return data && typeof data === "object" ? data : null;
   } catch (e) {
-    return null; // sin manifest o JSON invalido: piezas automaticas
+    return null;
   }
 }
 
@@ -85,7 +58,6 @@ async function loadInto(view, src) {
   if (view.disposed) { disposeObject(gltf.scene); return; }
   const obj = gltf.scene;
 
-  // Centrar en el origen (docs/04).
   obj.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(obj);
   const center = box.getCenter(new THREE.Vector3());
@@ -126,15 +98,8 @@ function describeMaterial(m) {
   return { textured, color: m.color ? [m.color.r, m.color.g, m.color.b] : [1, 1, 1] };
 }
 
-// ---- piezas: API para el adapter de la escena (js/stage/interaction.js) ------
-
 const explodeFrac = (item) => Math.min(1, item.explode / HOLO.EXPLODE_OUT);
 
-// Que hay del modelo bajo el punto (x, y) de pantalla: null si el punto cae en
-// una zona transparente del cuadro; { part } si toca el modelo (part = indice de
-// la pieza, -1 si toca una malla que no es pieza). Mientras carga, todo el cuadro
-// cuenta como modelo. El resultado se memoriza dentro del mismo frame (el mismo
-// punto se consulta varias veces: cursor, resaltado, pinch).
 function pickModel(item, x, y) {
   const v = item.view;
   if (!v.ready) return v.error ? null : { part: -1 };
@@ -146,20 +111,17 @@ function pickModel(item, x, y) {
   return v.pickHit;
 }
 
-// Las piezas se apuntan y se toman solo con el modelo desarmado (README, fase 7).
 export function piecesActive(item) {
   return item.type === "model" && item.view.ready && item.view.parts.length >= 2
     && explodeFrac(item) >= PIECES.PICK_MIN_EXPLODE;
 }
 
-// withIds: agrega los numeros de pieza automaticos (para escribir el manifest).
 export function pieceLabel(item, i, withIds = false) {
   const p = item.view.parts[i];
   if (!p) return "";
   return withIds ? p.label + " · #" + p.ids.join(",") : p.label;
 }
 
-// La pieza i se puede tomar (no la tiene ya otra mano).
 function pieceFree(item, i) { return piecesActive(item) && i >= 0 && !isDragged(item.view, i); }
 
 function pieceBegin(item, i, hand, x, y) {
@@ -168,40 +130,68 @@ function pieceBegin(item, i, hand, x, y) {
 
 function pieceMove(item, hand, x, y) { moveDrag(item.view, hand, x, y); }
 
-// Suelta la pieza; si con eso quedan todas encajadas, el modelo se arma. En el
-// armado guiado solo encaja la pieza que toca (out.wrong: se solto otra cerca de
-// su lugar; out.expected: la que tocaba).
 function pieceEnd(item, hand) {
   const v = item.view;
   const res = endDrag(v, hand, (i) => guideCanSnap(item.guide, i));
   if (!res) return null;
   const out = { part: res.i, label: v.parts[res.i].label, snapped: res.snapped,
     placed: placedCount(v), total: v.parts.length };
-  if (item.guide) {
-    if (res.snapped) guideAdvance(item.guide, res.i);
-    else if (res.near) { out.wrong = true; out.expected = pieceLabel(item, guideExpected(item.guide)); }
-  }
-  if (res.snapped && out.placed === out.total) {
-    if (item.guide) stopGuide(item, true);
-    item.explodeTarget = 0;
-    emit("model:assembled", { item });
-  } else if (item.guide && res.snapped) emitGuide(item);
+  if (res.snapped) afterSnap(item, res.i);
+  else if (item.guide && res.near) { out.wrong = true; out.expected = pieceLabel(item, guideExpected(item.guide)); }
   return out;
 }
 
-// ---- armado guiado (7E) ------------------------------------------------------
+function afterSnap(item, i) {
+  const v = item.view;
+  if (item.guide) guideAdvance(item.guide, i);
+  if (placedCount(v) === v.parts.length) {
+    if (item.guide) stopGuide(item, true);
+    item.explodeTarget = 0;
+    emit("model:assembled", { item });
+  } else if (item.guide) emitGuide(item);
+}
+
+export function placePiece(item, i) {
+  const v = item.view;
+  if (item.type !== "model" || !v.ready || !piecesActive(item)) return null;
+  const idx = i === "next" ? guideExpected(item.guide) : Number(i);
+  if (!Number.isInteger(idx) || idx < 0 || !guideCanSnap(item.guide, idx) || !snapPiece(v, idx)) return null;
+  const out = { item, part: idx, label: v.parts[idx].label, snapped: true, placed: placedCount(v), total: v.parts.length };
+  emit("piece:drop", { hand: null, ...out });
+  afterSnap(item, idx);
+  return out;
+}
+
+export function undoLastPiece(item) {
+  const v = item.view;
+  if (item.type !== "model" || !v.ready || !v.placedOrder.length) return null;
+  const i = v.placedOrder.pop();
+  unplacePiece(v, i, explodeFrac(item));
+  if (item.guide && item.guide.step > 0 && item.guide.order[item.guide.step - 1] === i) {
+    item.guide.step--;
+    emitGuide(item);
+  }
+  return v.parts[i].label;
+}
+
+export function resetModelPieces(item) {
+  const v = item.view;
+  if (item.type !== "model" || !v.ready || v.parts.length < 2) return false;
+  if (item.guide) return startGuide(item);
+  resetPieces(v, explodeFrac(item));
+  item.explodeTarget = HOLO.EXPLODE_OUT;
+  return true;
+}
 
 function emitGuide(item) {
   const g = item.guide;
   emit("guide:update", { item, step: g.step + 1, total: g.order.length, label: pieceLabel(item, guideExpected(g)) });
 }
 
-// Empieza un armado guiado desde cero: desarma el modelo y deja todas las piezas
-// sueltas. false si el modelo no se puede desarmar.
 export function startGuide(item) {
   const v = item.view;
   if (item.type !== "model" || !v.ready || v.parts.length < 2) return false;
-  resetPieces(v);
+  resetPieces(v, explodeFrac(item));
   const fromManifest = !!(v.manifest && Array.isArray(v.manifest.pieces) && v.manifest.pieces.length);
   item.guide = createGuide(guideOrder(v.parts.map((p) => p.lag), fromManifest));
   item.explodeTarget = HOLO.EXPLODE_OUT;
@@ -209,7 +199,6 @@ export function startGuide(item) {
   return true;
 }
 
-// done: se termino armando el modelo (false = se cancelo).
 export function stopGuide(item, done = false) {
   if (!item.guide) return;
   item.guide = null;
@@ -217,15 +206,10 @@ export function stopGuide(item, done = false) {
   emit("guide:end", { item, done });
 }
 
-// ---- modo de color ----------------------------------------------------------
-
-// Preferencia "original" | "holo" -> modo de ESTE modelo: los que no traen
-// apariencia propia siempre se ven holograficos (js/three/modelLook.js).
 function modeFor(view, look) {
   return look === "holo" || !view.hasLook ? "holo" : "solid";
 }
 
-// "holo" | "solid"
 async function applyMode(view, mode) {
   if (!view.ready || view.mode === mode) return;
   view.mode = mode;
@@ -245,8 +229,6 @@ async function applyMode(view, mode) {
   view.scene.environment = holo ? null : view.envTexture || null;
 }
 
-// Resolucion adaptativa (docs/04, ensureModelRes): el canvas mide MODEL.PX en CSS y
-// el item se escala con CSS; si se agranda, se sube la resolucion del dibujo.
 function ensureResolution(view, scale, held) {
   if (held) return;
   const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -263,7 +245,7 @@ function draw(view, ry, explode, dt) {
     const f = Math.min(1, explode / HOLO.EXPLODE_OUT);
     applyPieces(view, f, dt);
     view.camera.position.z = MODEL.CAM_DIST * (1 + MODEL.EXPLODE_ZOOM * f);
-    view.holoMat.uniforms.uTime.value = Date.now() / 1000; // reloj: tracker y OBS sincronizados
+    view.holoMat.uniforms.uTime.value = Date.now() / 1000;
   }
   view.renderer.render(view.scene, view.camera);
   view.drawn++;
@@ -342,12 +324,9 @@ registerItemType("model", {
   },
   update(item, dt) {
     const v = item.view;
-    // giro automatico (Menu > Vista); se pausa con la palma de "alto" y mientras
-    // se arrastra una pieza
     if (settings.autoSpin && !item.manipulated && !item.spinPaused && !v.drags.size) item.ry += HOLO.SPIN * 0.5 * dt;
     item.explode += (item.explodeTarget - item.explode) * (1 - Math.exp(-HOLO.EXPLODE_RATE * dt));
     if (v.ready && item.explodeTarget / HOLO.EXPLODE_OUT < PIECES.PICK_MIN_EXPLODE) {
-      // se armo con el gesto, Herramientas o un comando: termina cualquier armado a mano
       cancelDrags(v);
       relaxPieces(v, dt, item.explode < 0.01);
       stopGuide(item);
@@ -363,6 +342,7 @@ registerItemType("model", {
     return item.view.ready ? { pieces: serializePieces(item.view) } : {};
   },
   sync(ri, def, env) {
+    ri.view.scene.scale.x = env.mirror ? -1 : 1;
     ri.ry += ((def.ry || 0) - ri.ry) * FOLLOW_LERP;
     ri.explode += ((def.explode || 0) - ri.explode) * FOLLOW_LERP;
     if (ri.view.ready) applyRemotePieces(ri.view, def.pieces, FOLLOW_LERP);

@@ -1,25 +1,3 @@
-// Botones de la interfaz manejados con la mano o el mouse. Las DECISIONES son
-// puras y tienen tests:
-//   js/ui/targeting.js  a que boton apunta cada mano (histeresis, huecos, intencion)
-//   js/ui/press.js      si el pinch es click, arrastre, cancelacion o "mantener"
-// Este modulo solo las conecta con el DOM:
-//
-//   data-action="nombre"    boton: se ejecuta la accion al hacer click
-//   data-hold="ms"          accion destructiva: hay que mantener el pinch
-//   data-drag="<id>"        el pinch sobre este elemento puede mover al elemento <id>
-//                           (orbe, barra del panel): mantener quieto ~0.45 s lo
-//                           "levanta" y luego se mueve
-//   hover                   el boton apuntado se ilumina ANTES de pulsar
-//   permanencia (opcional)  con Ajustes > "Seleccionar dejando el cursor quieto",
-//                           la mano pulsa un boton de la interfaz tras 0.8 s quieta
-//                           encima (nunca los de "mantener": Salir, Reiniciar)
-//
-// Cada pulsacion emite ui:click { hand, action } (pulso del cursor, sonido).
-//
-// Con la mano, el boton apuntado es "pegajoso" y al hacer pinch se pulsa lo que
-// se apuntaba ANTES de juntar los dedos. El mouse no tiembla: usa el punto exacto.
-// No se usan eventos "click" nativos: el mouse entra por la misma tuberia de
-// gestos que las manos.
 import { on, emit } from "../core/bus.js";
 import { UI_TARGET } from "../core/config.js";
 import { settings } from "../core/settings.js";
@@ -27,11 +5,9 @@ import { runAction } from "./actions.js";
 import { createPress, stepPress, endPress, pressProgress } from "./press.js";
 import { stickyTarget, nearestIn, pickIntent, magnetPoint, createDwell, stepDwell, dwellProgress } from "./targeting.js";
 
-const presses = new Map(); // hand -> { p, btn, target, dx, dy }
-const aims = new Map();    // hand -> { current, history: [{ t, el }], dwell }
+const presses = new Map();
+const aims = new Map();
 let hovered = new Set();
-// Reloj de la interfaz = el "now" del ultimo frame (updatePointer). Asi un replay
-// cuadro a cuadro, con tiempo virtual, mide duraciones igual que la camara real.
 let clock = performance.now();
 
 const rectOf = (el) => el.getBoundingClientRect();
@@ -42,7 +18,6 @@ export function buttonAt(x, y) {
   return btn && !btn.disabled ? btn : null;
 }
 
-// Boton bajo el punto; dentro del panel, un hueco entre filas vale la mas cercana.
 function candidateAt(x, y) {
   const top = document.elementFromPoint(x, y);
   if (!top) return null;
@@ -59,12 +34,8 @@ function fire(btn, hand) {
   runAction(btn.dataset.action, btn.dataset.arg, btn);
 }
 
-// Clave estable de un boton (su accion), para la permanencia: sobrevive a que el
-// menu se re-dibuje y cambie el nodo.
 function actionKey(el) { return el ? el.dataset.action + "|" + (el.dataset.arg || "") : null; }
 
-// Botones que aceptan permanencia: los de la interfaz (orbe, panel, tutorial), no
-// los de "mantener" (acciones destructivas).
 function dwellable(el) { return !!el && !el.dataset.hold && !!el.closest("[data-ui]"); }
 
 function clearVisuals(e) {
@@ -72,8 +43,6 @@ function clearVisuals(e) {
   if (e.target) e.target.classList.remove("lifted", "dragging");
 }
 
-// Objetivo de un pinch que empieza: con la mano, lo apuntado ANTES de juntar los
-// dedos (o, si no hay historial, lo que hay bajo el punto).
 function pinchTarget(hand, x, y, source) {
   if (source === "mouse") return buttonAt(x, y);
   const a = aims.get(hand);
@@ -116,7 +85,6 @@ function moveTarget(e, h) {
   emit("ui:drag", { id: t.id });
 }
 
-// Actualiza a que apunta esta mano (con histeresis) y guarda el historial.
 function updateAim(h, now) {
   let a = aims.get(h.id);
   if (!a) { a = { current: null, history: [], dwell: createDwell() }; aims.set(h.id, a); }
@@ -128,7 +96,6 @@ function updateAim(h, now) {
   return a.current;
 }
 
-// Seleccion por permanencia (solo mano, solo si esta activada, nunca durante un pinch).
 function updateDwell(h, cur, now) {
   const d = aims.get(h.id).dwell;
   const active = settings.dwellSelect && h.source === "hand" && !h.pinched && !presses.has(h.id);
@@ -136,7 +103,6 @@ function updateDwell(h, cur, now) {
   if (stepDwell(d, actionKey(el), h.ax, h.ay, now)) fire(el, h.id);
 }
 
-// Llamar una vez por frame con los estados de mano (incluido el mouse).
 export function updatePointer(hands, now) {
   clock = now;
   const next = new Set();
@@ -166,8 +132,6 @@ export function updatePointer(hands, now) {
   hovered = next;
 }
 
-// Progreso 0..1 para el anillo del cursor de esta mano: mantener, levantar el
-// orbe o, si esta activada, la permanencia sobre un boton.
 export function holdProgressOf(hand) {
   const e = presses.get(hand);
   if (e) return pressProgress(e.p, clock);
@@ -176,8 +140,6 @@ export function holdProgressOf(hand) {
   return dw >= UI_TARGET.DWELL_SHOW_FROM ? dw : 0;
 }
 
-// Donde DIBUJAR el cursor de una mano: dentro del panel se centra en la fila
-// apuntada (o en la fila fijada durante el pinch), como asistencia visual.
 export function cursorDisplayPoint(h) {
   const e = presses.get(h.id);
   const el = (e && e.btn) || (aims.get(h.id) || {}).current;

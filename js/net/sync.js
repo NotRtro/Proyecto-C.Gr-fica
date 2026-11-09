@@ -1,14 +1,10 @@
-// Comunicacion con server.py: publica el estado de la escena y recibe comandos.
 import { store } from "../core/store.js";
 import { settings } from "../core/settings.js";
 import { serializeItem } from "../items/registry.js";
 import { applyCmds } from "../commands.js";
 
-let current = null; // publicacion en curso (si el servidor tarda, no se apilan requests)
+let current = null;
 
-// Cursores en el cable: una entrada por mano fisica (el mouse no se publica).
-// La clave es el ID estable de la mano (h1, h2...); h = lateralidad votada.
-// view: preferencias visuales que la render page (OBS) debe replicar.
 function buildPayload() {
   const payload = {
     cursors: {}, items: [],
@@ -30,7 +26,7 @@ async function post(withCmds) {
     });
     const data = await res.json();
     if (withCmds && data && data.cmds) applyCmds(data.cmds);
-  } catch (e) { /* servidor no disponible; se reintenta en la proxima publicacion */ }
+  } catch (e) { }
 }
 
 export function pushState() {
@@ -38,13 +34,11 @@ export function pushState() {
   return current;
 }
 
-// Publicacion final (al salir): espera la que este en curso y publica el estado
-// actual sin aplicar comandos nuevos. Asi OBS no se queda con la ultima escena.
 export async function flushState() {
   while (current) await current;
   await post(false);
 }
 
 export async function loadConfig() {
-  try { store.cfg = await fetch("/config").then((r) => r.json()); } catch (e) { /* usa defaults */ }
+  try { store.cfg = await fetch("/config").then((r) => r.json()); } catch (e) { }
 }

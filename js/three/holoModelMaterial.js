@@ -1,10 +1,3 @@
-// Material holografico para modelos GLB cualquiera (docs/04, "Modo holograma").
-// A diferencia del shader del reactor, no necesita atributos especiales
-// (barycentric/pivot): funciona con cualquier malla.
-//   - fresnel: los bordes brillan mas que las caras de frente
-//   - lineas de barrido finas + un "haz" que recorre el modelo de abajo arriba
-//     cada 6 s (sincronizado por reloj, igual en tracker y render page)
-// transparent + depthWrite:false + DoubleSide, como indica docs/04.
 import * as THREE from "three";
 
 const VS = `
@@ -39,10 +32,8 @@ void main(){
   float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), rimPow);
   vec3 col = mix(cBase, cRim, f);
   float a = mix(baseA, rimA, f);
-  // lineas de barrido finas
   float scan = 0.5 + 0.5 * sin(vY / max(uSpan, 1e-4) * 160.0 - uTime * 4.0);
   col *= 0.85 + 0.25 * scan;
-  // haz que recorre el modelo cada 6 s
   float h = (vY - uMinY) / max(uSpan, 1e-4);
   float beam = exp(-pow((h - fract(uTime / 6.0)) / 0.035, 2.0));
   col += cRim * beam * 1.6;
