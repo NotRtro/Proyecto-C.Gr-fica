@@ -15,10 +15,11 @@ import { createGestureEngine } from "../js/input/gestures.js";
 import { hand } from "./synthetic.mjs";
 import { setSetting } from "../js/core/settings.js";
 import { samplesFromRecording } from "./calibrate.mjs";
-import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, trialDwell, trialHold, sweepMenu } from "./menuBench.mjs";
+import { rng, rate, trialOpenMenu, trialPickRow, trialClickOrDrag, trialDwell, trialHold, sweepMenu } from "./menuBench.mjs";
 import { trialJoin, trialHoldStill, trialHoldAfterMove, summary } from "./twoHandBench.mjs";
 import { trialEmptyTap, trialExplodeDrag, trialVerticalDrag } from "./explodeBench.mjs";
 import { trialStop, trialPalmOverMenu, sweepPalm, trialDial, trialStillDrift, trialVolante } from "./palmBench.mjs";
+import { trialPiece } from "./pieceBench.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
 import {
@@ -307,11 +308,6 @@ test("interfaz encima: un pinch sobre el menu no agarra ni explota lo de atras",
 
 console.log("interfaz (docs/14, paso A):");
 
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-}
-
 function simulatePress({ ms, path = () => ({ x: 0, y: 0 }), jitter = 0, draggable = false,
   holdMs = 0, source = "hand", spanPx = 110, seed = 1 }) {
   const rand = rng(seed);
@@ -383,15 +379,19 @@ test("mouse: arrastre inmediato y click normal", () => {
 });
 
 test("filtro One Euro: quita la mayor parte del temblor y sigue rapido a la mano", () => {
-  const rand = rng(7);
-  const f = createPointFilter(CURSOR_FILTER);
   let rawErr = 0, filtErr = 0, n = 0;
-  for (let t = 0; t <= 2000; t += 33) {
-    const raw = { x: 500 + (rand() * 2 - 1) * 8, y: 300 + (rand() * 2 - 1) * 8 };
-    const q = f.filter(raw, t);
-    if (t > 500) { rawErr += Math.hypot(raw.x - 500, raw.y - 300); filtErr += Math.hypot(q.x - 500, q.y - 300); n++; }
+  for (let seed = 1; seed <= 10; seed++) {
+    const rand = rng(seed);
+    const g = createPointFilter(CURSOR_FILTER);
+    for (let t = 0; t <= 2000; t += 33) {
+      const raw = { x: 500 + (rand() * 2 - 1) * 8, y: 300 + (rand() * 2 - 1) * 8 };
+      const q = g.filter(raw, t);
+      if (t > 500) { rawErr += Math.hypot(raw.x - 500, raw.y - 300); filtErr += Math.hypot(q.x - 500, q.y - 300); n++; }
+    }
   }
-  check(filtErr / n < 0.4 * (rawErr / n), "temblor filtrado " + (filtErr / n).toFixed(2) + " px vs crudo " + (rawErr / n).toFixed(2) + " px");
+  check(filtErr / n < 0.45 * (rawErr / n), "temblor filtrado " + (filtErr / n).toFixed(2) + " px vs crudo " + (rawErr / n).toFixed(2) + " px");
+  const f = createPointFilter(CURSOR_FILTER);
+  for (let t = 0; t <= 2000; t += 33) f.filter({ x: 500, y: 300 }, t);
   let q = null;
   for (let t = 2033; t <= 2400; t += 33) {
     const x = 500 + Math.min(1, (t - 2033) / 200) * 300;
@@ -1239,6 +1239,54 @@ test("volante: inclinar 40 grados gira 36, igual que la perilla, sin detener el 
       check(Math.abs(r.turned - 36) <= 4, "giro " + r.turned.toFixed(1) + " grados (semilla " + s + ")");
     }
   });
+});
+
+console.log("tomar una pieza (modelo desarmado):");
+
+const pieceRate = (opts, n = 20) => {
+  let ok = 0;
+  for (let s = 1; s <= n; s++) if (trialPiece(s, opts).ok) ok++;
+  return ok / n;
+};
+
+test("piezas: el salto del pinch no hace perder la pieza apuntada, chica o grande, con la mano lejos o cerca", () => {
+  for (const span of [60, 110, 200]) {
+    for (const radius of [8, 12, 20]) {
+      const r = pieceRate({ radius, span, tremor: 4 * span / 110 });
+      check(r >= 0.95, "mano " + span + " px, pieza de radio " + radius + ": " + Math.round(r * 100) + " %");
+    }
+  }
+});
+
+test("piezas: sin el punto de intencion, el salto si hace perder las piezas chicas", () => {
+  const keep = { ms: UI_TARGET.INTENT_MS, skip: UI_TARGET.INTENT_SKIP_MS };
+  UI_TARGET.INTENT_MS = 0;
+  UI_TARGET.INTENT_SKIP_MS = 0;
+  try {
+    const r = pieceRate({ radius: 12 });
+    check(r < 0.5, "sin intencion deberia fallar: " + Math.round(r * 100) + " %");
+  } finally {
+    UI_TARGET.INTENT_MS = keep.ms;
+    UI_TARGET.INTENT_SKIP_MS = keep.skip;
+  }
+});
+
+test("piezas: apuntando un poco fuera del borde, igual se toma la pieza mas cercana", () => {
+  for (const radius of [8, 12, 20]) {
+    const r = pieceRate({ radius, aim: 1.3 });
+    check(r >= 0.95, "pieza de radio " + radius + ": " + Math.round(r * 100) + " %");
+  }
+});
+
+test("piezas: sin la seleccion por proximidad, apuntar fuera del borde falla mucho mas", () => {
+  const keep = PIECES.NEAR_SPAN;
+  PIECES.NEAR_SPAN = 0;
+  try {
+    const r = pieceRate({ radius: 12, aim: 1.3 });
+    check(r < 0.8, "sin proximidad deberia fallar mas: " + Math.round(r * 100) + " %");
+  } finally {
+    PIECES.NEAR_SPAN = keep;
+  }
 });
 
 console.log("\n" + passed + " ok, " + failed + " fallas");

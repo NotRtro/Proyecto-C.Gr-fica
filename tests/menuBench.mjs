@@ -14,8 +14,14 @@ const inBox = (r, x, y) => x >= r.left && x <= r.right && y >= r.top && y <= r.b
 const center = (r) => ({ x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 });
 
 export function rng(seed) {
-  let s = seed >>> 0;
-  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  let s = (seed * 0x9e3779b9) >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function createMenu() {

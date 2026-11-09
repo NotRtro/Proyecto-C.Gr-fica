@@ -140,6 +140,7 @@ export const PALM = {
 export const PIECES = {
   MIN_COUNT: 4,
   PICK_MIN_EXPLODE: 0.3,
+  NEAR_SPAN: 0.15,
   SNAP_FRAC: 0.07,
   SNAP_MS: 260,
   DRAG_EDGE: 0.06,

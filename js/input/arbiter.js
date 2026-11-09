@@ -1,5 +1,5 @@
 import { dist } from "../core/util.js";
-import { TAP, TWO_HAND, EXPLODE_DRAG, FOLLOW_LERP, HOLO, MOUSE, PALM } from "../core/config.js";
+import { TAP, TWO_HAND, EXPLODE_DRAG, FOLLOW_LERP, HOLO, MOUSE, PALM, UI_TARGET, PIECES } from "../core/config.js";
 
 export const MODES = { IDLE: "IDLE", GRAB: "GRAB", PIECE: "PIECE", TWO_HAND: "TWO_HAND", EXPLODE: "EXPLODE", DIAL: "DIAL", LOCKED: "LOCKED" };
 
@@ -40,8 +40,40 @@ export function createArbiter(adapter) {
   let locked = false;
 
   function rec(id) {
-    if (!hands.has(id)) hands.set(id, { id, role: "idle", itemId: null, ax: 0, ay: 0, kx: 0, ky: 0 });
+    if (!hands.has(id)) hands.set(id, { id, role: "idle", itemId: null, ax: 0, ay: 0, kx: 0, ky: 0, trail: [] });
     return hands.get(id);
+  }
+
+  function track(r, now) {
+    r.trail.push({ t: now, x: r.ax, y: r.ay });
+    while (r.trail.length && r.trail[0].t < now - UI_TARGET.HISTORY_MS) r.trail.shift();
+  }
+
+  function intentPoint(r, now) {
+    const pts = r.trail.filter((p) => p.t > now - UI_TARGET.INTENT_MS && p.t <= now - UI_TARGET.INTENT_SKIP_MS);
+    if (!pts.length) return null;
+    return { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
+  }
+
+  function pieceNear(x, y, radius) {
+    const hit = adapter.pieceAt(x, y);
+    if (hit || radius <= 0) return hit;
+    for (let ring = 1; ring <= 3; ring++) {
+      const d = radius * ring / 3;
+      for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4;
+        const near = adapter.pieceAt(x + Math.cos(a) * d, y + Math.sin(a) * d);
+        if (near) return near;
+      }
+    }
+    return null;
+  }
+
+  function pieceFor(r, h, now) {
+    if (!adapter.pieceAt) return null;
+    if (h.source === "mouse") return adapter.pieceAt(h.ax, h.ay);
+    const aim = intentPoint(r, now) || { x: h.ax, y: h.ay };
+    return pieceNear(aim.x, aim.y, (h.spanPx || 0) * PIECES.NEAR_SPAN) || adapter.pieceAt(h.ax, h.ay);
   }
 
   function hold(item, delta) {
@@ -153,7 +185,7 @@ export function createArbiter(adapter) {
     if (locked) { r.role = "locked"; return; }
     if (adapter.isUiAt && adapter.isUiAt(h.ax, h.ay)) { r.role = "ui"; return; }
 
-    const piece = adapter.pieceAt ? adapter.pieceAt(h.ax, h.ay) : null;
+    const piece = pieceFor(r, h, now);
     if (piece && startPiece(r, h, piece)) return;
 
     const item = adapter.hitTest(h.ax, h.ay);
@@ -262,6 +294,7 @@ export function createArbiter(adapter) {
       if (h.present || h.removed) {
         r.ax = h.ax; r.ay = h.ay;
         r.kx = h.kx ?? h.ax; r.ky = h.ky ?? h.ay;
+        if (h.present) track(r, now);
       }
       if (h.pinchChanged === "start") onPinchStart(h, r, now);
       if (h.pinched && h.present && h.pinchChanged !== "end") onPinchHold(h, r);
