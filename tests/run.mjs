@@ -15,7 +15,7 @@ import { createGestureEngine } from "../js/input/gestures.js";
 import { hand } from "./synthetic.mjs";
 import { setSetting } from "../js/core/settings.js";
 import { samplesFromRecording } from "./calibrate.mjs";
-import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, trialDwell, sweepMenu } from "./menuBench.mjs";
+import { rate, trialOpenMenu, trialPickRow, trialClickOrDrag, trialDwell, trialHold, sweepMenu } from "./menuBench.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
 import {
@@ -1022,6 +1022,41 @@ test("permanencia: el tiempo elegido en Ajustes se aplica y un valor raro vuelve
     setSetting("dwellTime", "800");
   }
 });
+
+console.log("mantener para confirmar (Salir, Reiniciar):");
+
+test("mantener: Salir se activa una sola vez al mantener 1,8 s, con la mano lejos, normal y cerca", () => {
+  for (const span of [60, 110, 200, 260]) {
+    let ok = 0;
+    for (let s = 1; s <= 20; s++) {
+      const r = trialHold(s, DWELL_TREMOR * span / 110, { span });
+      if (r.fires.length === 1 && r.exitFired) ok++;
+    }
+    check(ok === 20, "mano de " + span + " px: " + ok + "/20");
+  }
+});
+
+test("mantener: un clic normal, soltar antes, apuntar a la fila vecina o arrepentirse no activan Salir", () => {
+  const cases = [
+    ["clic normal", (s) => ({ pinchMs: 60 + (s * 13) % 640 })],
+    ["soltar a los 1,2 s", () => ({ pinchMs: 1200 })],
+    ["mantener sobre Ajustes", () => ({ aim: "settings" })],
+    ["alejarse antes de terminar", (s) => ({ leaveAfter: 300 + (s * 37) % 900 })],
+  ];
+  for (const [name, opts] of cases) {
+    for (let s = 1; s <= 15; s++) {
+      check(!trialHold(s, DWELL_TREMOR, opts(s)).exitFired, name + ": se activo Salir (semilla " + s + ")");
+    }
+  }
+});
+
+test("mantener: aguanta una deriva lenta de la mano de 40 px/s y cancela una de 80 px/s", () => {
+  for (let s = 1; s <= 15; s++) {
+    check(trialHold(s, DWELL_TREMOR, { drift: 40 }).exitFired, "40 px/s deberia confirmarse (semilla " + s + ")");
+    check(!trialHold(s, DWELL_TREMOR, { drift: 80 }).exitFired, "80 px/s deberia cancelarse (semilla " + s + ")");
+  }
+});
+
 
 console.log("\n" + passed + " ok, " + failed + " fallas");
 process.exit(failed ? 1 : 0);

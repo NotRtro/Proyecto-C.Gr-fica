@@ -2,6 +2,7 @@ import { createInputPipeline } from "../js/input/pipeline.js";
 import { frameToDetections } from "../js/input/recorder.js";
 import { createPointerCore } from "../js/ui/pointerCore.js";
 import { nearestIn } from "../js/ui/targeting.js";
+import { UI_PRESS } from "../js/core/config.js";
 import { hand, VIDEO, FRAME_MS } from "./synthetic.mjs";
 
 const VIEW = { w: VIDEO.w, h: VIDEO.h };
@@ -24,7 +25,7 @@ function createMenu() {
   const close = { id: "close", action: "menu:close", r: box(488, 212, 534, 258) };
   const folders = ["models", "tools", "view", "help", "settings"].map((id, i) =>
     ({ id, action: "menu:folder", r: box(214, 278 + i * 62, 534, 334 + i * 62) }));
-  const exit = { id: "exit", action: "app:exit", hold: 1500, r: box(214, 588, 534, 648) };
+  const exit = { id: "exit", action: "app:exit", hold: UI_PRESS.CONFIRM_MS, r: box(214, 588, 534, 648) };
   const panel = box(203, 199, 545, 661);
   const bar = box(204, 200, 544, 268);
   const state = { open: false };
@@ -66,7 +67,7 @@ function createMenu() {
     drop(target) { log.push({ e: "drop", id: target.id }); },
   };
 
-  return { state, orb, folders, rows, panel, view, out, log, isUiAt: (x, y) => hitOrb(x, y) || inPanel(x, y) };
+  return { state, orb, folders, exit, rows, panel, view, out, log, isUiAt: (x, y) => hitOrb(x, y) || inPanel(x, y) };
 }
 
 function blend(a, b, f) {
@@ -237,6 +238,28 @@ export function trialDwell(seed, tremor, { span = 110, holdMs = 1500 } = {}) {
   const fires = b.menu.log.filter((l) => l.e === "fire");
   const ok = fires.length === 1 && fires[0].id === target.id;
   return { ok, ms: ok ? fires[0].t - arrived : null, target: target.id, log: b.menu.log };
+}
+
+export function trialHold(seed, tremor, { span = 110, pinchMs = 1800, drift = 0, aim = "exit", leaveAfter = null } = {}) {
+  const b = createBench({ seed, tremor, span, startOpen: true });
+  const target = aim === "exit" ? b.menu.exit : b.menu.folders.find((f) => f.id === aim);
+  b.place(pick(b.rand, 250, 900), pick(b.rand, 150, 600));
+  b.wait(200);
+  const a = aimInside(b, target.r, 0.6, 0.5);
+  b.moveTo(a.x, a.y, pick(b.rand, 450, 800));
+  b.wait(pick(b.rand, 150, 400));
+  b.close();
+  const ang = pick(b.rand, -Math.PI, Math.PI);
+  const still = leaveAfter === null ? pinchMs : Math.min(leaveAfter, pinchMs);
+  b.dragBy(Math.cos(ang) * drift * still / 1000, Math.sin(ang) * drift * still / 1000, still);
+  if (leaveAfter !== null) {
+    b.dragBy(Math.cos(ang) * 150, Math.sin(ang) * 150, 300);
+    b.wait(Math.max(0, pinchMs - still - 300));
+  }
+  b.open();
+  b.wait(300);
+  const fires = b.menu.log.filter((l) => l.e === "fire").map((l) => l.id);
+  return { fires, exitFired: fires.includes("exit"), log: b.menu.log };
 }
 
 export function sweepMenu(seed, tremor, ms, { dwell = false, span = 110 } = {}) {

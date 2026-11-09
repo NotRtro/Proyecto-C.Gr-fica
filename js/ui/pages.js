@@ -1,6 +1,6 @@
 import { store } from "../core/store.js";
 import { emit, on } from "../core/bus.js";
-import { HOLO, MODEL } from "../core/config.js";
+import { HOLO, MODEL, UI_PRESS } from "../core/config.js";
 import { findExplodable, spawnItem, findByType, findItem, removeItem, applyTransform } from "../items/registry.js";
 import { catalog, catalogLoaded, refreshCatalog } from "../net/catalog.js";
 import { addModel } from "../stage/models.js";
@@ -13,8 +13,6 @@ import { toast } from "./feedback.js";
 import { startTutorial } from "./tutorial.js";
 import { startCalibration } from "./calibration.js";
 import { settings } from "../core/settings.js";
-
-const HOLD_MS = 1500;
 
 function centerItem(it) {
   it.x = innerWidth / 2; it.y = innerHeight * 0.45; it.scale = 1;
@@ -94,7 +92,7 @@ registerMenuPage("root", {
     ui.page("view", "Vista"),
     ui.page("help", "Gestos"),
     ui.page("settings", "Ajustes"),
-    ui.button({ label: "Salir", action: "app:exit", hold: HOLD_MS, danger: true, hint: "mantener presionado" }),
+    ui.button({ label: "Salir", action: "app:exit", hold: UI_PRESS.CONFIRM_MS, danger: true, hint: "mantener presionado" }),
   ],
 });
 
@@ -131,12 +129,12 @@ registerMenuPage("tools", {
     ui.button({ label: findExplodable() && findExplodable().guide ? "Terminar armado guiado" : "Armado guiado",
       action: "tools:guide", hint: "pieza por pieza, en orden" }),
     ui.button({ label: "Deshacer última pieza", action: "tools:undo", hint: "la vuelve a sacar" }),
-    ui.button({ label: "Reiniciar piezas", action: "tools:reset-pieces", hold: HOLD_MS,
+    ui.button({ label: "Reiniciar piezas", action: "tools:reset-pieces", hold: UI_PRESS.CONFIRM_MS,
       hint: "mantener · todas sueltas otra vez" }),
     ui.button({ label: "Centrar modelo", action: "tools:center" }),
     ui.button({ label: findExplodable() && findExplodable().spinPaused ? "Reanudar giro" : "Detener giro",
       action: "tools:spin", hint: "o palma de \"alto\" quieta" }),
-    ui.button({ label: "Reiniciar escena", action: "tools:reset", hold: HOLD_MS, danger: true,
+    ui.button({ label: "Reiniciar escena", action: "tools:reset", hold: UI_PRESS.CONFIRM_MS, danger: true,
       hint: "mantener · borra tarjetas e imágenes" }),
   ],
 });
