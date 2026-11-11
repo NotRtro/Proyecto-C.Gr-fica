@@ -27,6 +27,7 @@ import {
   guideOrder, createGuide, guideExpected, guideCanSnap, guideAdvance,
 } from "../js/three/pieces.js";
 import { PIECES } from "../js/core/config.js";
+import { entriesInFolder } from "../js/net/catalog.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VIEW = { w: 1280, h: 720 };
@@ -93,6 +94,19 @@ function near(actual, expected, tol, what) {
   check(Math.abs(actual - expected) <= tol,
     what + ": esperado " + expected.toFixed(3) + " +-" + tol + ", obtenido " + actual.toFixed(3));
 }
+
+test("catalogo: una carpeta muestra sus GLB directos y sus subcarpetas", () => {
+  const list = [
+    { name: "Corazón", folder: "organos" },
+    { name: "Ojo", folder: "organos" },
+    { name: "Detalle", folder: "organos/cabeza" },
+    { name: "Cuerpo", folder: "general" },
+  ];
+  const root = entriesInFolder(list);
+  check(root.folders.join() === "general,organos" && root.models.length === 0, "raíz por carpetas");
+  const organs = entriesInFolder(list, "organos");
+  check(organs.models.length === 2 && organs.folders.join() === "cabeza", "contenido directo de organos");
+});
 
 console.log("gestos (grabaciones sinteticas):");
 
@@ -903,8 +917,8 @@ test("armado guiado: orden (manifest o por tamano), solo encaja la que toca, ter
   check(guideAdvance(g, 1) && guideExpected(g) === -1, "la ultima termina el armado");
 });
 
-test("manifest del Buggy (media/models/Buggy.json): 16 piezas con nombre y el resto al chasis", () => {
-  const manifest = JSON.parse(readFileSync(join(HERE, "..", "media", "models", "Buggy.json"), "utf8"));
+test("manifest del Buggy movido a Modelos old: 16 piezas con nombre y el resto al chasis", () => {
+  const manifest = JSON.parse(readFileSync(join(HERE, "..", "media", "models", "Modelos old", "Buggy.json"), "utf8"));
   const g = groupPieces(129, manifest);
   check(g.length === 16 && g.every((x) => x.label), "16 grupos con nombre, hubo " + g.length);
   check(g.reduce((n, x) => n + x.members.length, 0) === 129, "ninguna pieza se pierde ni se repite");

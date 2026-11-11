@@ -2,7 +2,7 @@ import { store } from "../core/store.js";
 import { emit, on } from "../core/bus.js";
 import { HOLO, MODEL, UI_PRESS } from "../core/config.js";
 import { findExplodable, spawnItem, findByType, findItem, removeItem, applyTransform } from "../items/registry.js";
-import { catalog, catalogLoaded, refreshCatalog } from "../net/catalog.js";
+import { catalog, catalogLoaded, refreshCatalog, folderEntries } from "../net/catalog.js";
 import { addModel } from "../stage/models.js";
 import { startGuide, stopGuide, undoLastPiece, resetModelPieces } from "../items/model.js";
 import { cycleCamera } from "../input/camera.js";
@@ -33,6 +33,8 @@ registerAction("model:remove", (id) => {
   refreshMenu();
 });
 registerAction("model:refresh", () => { refreshCatalog().then(refreshMenu); });
+let modelFolder = "";
+registerAction("model:folder", (folder) => { modelFolder = folder || ""; refreshMenu(); });
 on("menu:open", () => { refreshCatalog().then(refreshMenu); });
 on("model:loaded", ({ item, stats }) => {
   toast((item.title || "Modelo") + " listo · " + stats.parts + " piezas · " + Math.round(stats.triangles / 1000) + " mil triángulos");
@@ -98,27 +100,62 @@ registerMenuPage("root", {
 
 const mb = (bytes) => (bytes / 1e6).toFixed(1) + " MB";
 const inScene = (src) => store.items.find((it) => it.type === "model" && it.src === src);
+const parentFolder = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+const childFolder = (path, name) => path ? path + "/" + name : name;
+
+function modelButton(ui, model) {
+  return ui.button({
+    label: model.name,
+    action: "model:add",
+    arg: model.src,
+    hint: (inScene(model.src) ? "en escena · traer al centro" : "agregar") + " · " + mb(model.bytes),
+  });
+}
+
+function buildModelsPage(ui) {
+  const entries = folderEntries(modelFolder);
+  const rows = modelFolder
+    ? [ui.button({
+      label: "← Volver",
+      action: "model:folder",
+      arg: parentFolder(modelFolder),
+      hint: "Modelos / " + modelFolder,
+    })]
+    : [ui.button({
+      label: "reactor.holo",
+      action: "model:reactor",
+      hint: findByType("holo") ? "en escena · traer al centro" : "integrado · agregar",
+    })];
+
+  rows.push(...entries.folders.map((folder) => ui.button({
+    label: "▸ " + folder,
+    action: "model:folder",
+    arg: childFolder(modelFolder, folder),
+    hint: "abrir carpeta",
+  })));
+  rows.push(...entries.models.map((model) => modelButton(ui, model)));
+
+  if (!catalogLoaded()) rows.push(ui.note("Leyendo el catálogo…"));
+  else if (!catalog().length) rows.push(ui.note("Pon archivos .glb en media/models para verlos aquí."));
+  else if (!entries.folders.length && !entries.models.length) rows.push(ui.note("Esta carpeta no contiene modelos."));
+
+  const glbCount = store.items.filter((item) => item.type === "model").length;
+  const present = store.items.filter((item) => item.type === "model" || item.type === "holo");
+  if (present.length) {
+    rows.push(ui.section("En escena · modelos GLB " + glbCount + " de " + MODEL.MAX_IN_SCENE));
+    rows.push(...present.map((item) => ui.button({
+      label: "Quitar " + (item.title || "modelo"),
+      action: "model:remove",
+      arg: item.id,
+    })));
+  }
+  rows.push(ui.button({ label: "Actualizar catálogo", action: "model:refresh" }));
+  return rows;
+}
 
 registerMenuPage("models", {
   title: "Modelos",
-  build: (ui) => {
-    const rows = [ui.button({ label: "reactor.holo", action: "model:reactor",
-      hint: findByType("holo") ? "en escena · traer al centro" : "integrado · agregar" })];
-    for (const m of catalog()) {
-      rows.push(ui.button({ label: m.name, action: "model:add", arg: m.src,
-        hint: (inScene(m.src) ? "en escena · traer al centro" : "agregar") + " · " + mb(m.bytes) }));
-    }
-    if (!catalogLoaded()) rows.push(ui.note("Leyendo el catálogo…"));
-    else if (!catalog().length) rows.push(ui.note("Pon archivos .glb en media/models para verlos aquí."));
-    const glbCount = store.items.filter((it) => it.type === "model").length;
-    const present = store.items.filter((it) => it.type === "model" || it.type === "holo");
-    if (present.length) {
-      rows.push(ui.section("En escena · modelos GLB " + glbCount + " de " + MODEL.MAX_IN_SCENE));
-      for (const it of present) rows.push(ui.button({ label: "Quitar " + (it.title || "modelo"), action: "model:remove", arg: it.id }));
-    }
-    rows.push(ui.button({ label: "Actualizar catálogo", action: "model:refresh" }));
-    return rows;
-  },
+  build: buildModelsPage,
 });
 
 registerMenuPage("tools", {

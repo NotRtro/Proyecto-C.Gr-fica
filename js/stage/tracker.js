@@ -141,7 +141,7 @@ function frame(now) {
     detections, video: lastVideo, now: tIn, view: currentView(), extra: mouseStates,
   }).concat(mouseStates);
   updatePointer(store.hands, tIn);
-  updatePartHover(store.hands, { locked: input.arbiter.isLocked() });
+  updatePartHover(store.hands, { locked: input.arbiter.isLocked(), now: tIn });
   renderCursors(store.hands, { kindAt: hoverKindAt, progressOf: cursorProgress, displayOf: cursorDisplayPoint });
   updateTutorial();
   updateCalibration(store.hands, tIn);

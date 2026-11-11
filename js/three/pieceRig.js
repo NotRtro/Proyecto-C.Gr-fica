@@ -29,6 +29,19 @@ function nodeTree(root, parser) {
 
 const inv3Of = (m4) => new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().copy(m4).invert());
 
+function collectAnatomyIds(nodes, names) {
+  const ids = new Set();
+  const add = (value) => {
+    for (const match of String(value || "").matchAll(/za_[0-9a-f]+/gi)) ids.add(match[0].toLowerCase());
+  };
+  names.forEach(add);
+  for (const { node } of nodes) node.traverse((object) => {
+    add(object.name);
+    add(object.userData?.id);
+  });
+  return [...ids];
+}
+
 export function buildPieces(view, obj, parser, diag, manifest) {
   let skinned = false;
   obj.traverse((n) => { if (n.isSkinnedMesh) skinned = true; });
@@ -51,8 +64,13 @@ export function buildPieces(view, obj, parser, diag, manifest) {
     const meshes = [];
     for (const n of nodes) n.node.traverse((m) => { if (m.isMesh) { meshes.push(m); view.meshPiece.set(m, i); } });
     const single = g.members.length === 1 ? prettyName(auto[g.members[0]].name) : null;
+    const sourceNames = g.members.map((j) => auto[j].name);
     return {
-      nodes, meshes, ids: g.members.map((j) => j + 1),
+      nodes,
+      meshes,
+      ids: g.members.map((j) => j + 1),
+      anatomyIds: collectAnatomyIds(nodes, sourceNames),
+      sourceNames,
       label: g.label || single || "Pieza " + (g.members[0] + 1),
       center: boxes[i].getCenter(new THREE.Vector3()),
       off: new THREE.Vector3(...plan[i].offset), lag: plan[i].lag,

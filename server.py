@@ -128,41 +128,99 @@ def _read_ring_state() -> dict[str, Any]:
 
 MODEL_EXTS = (".glb", ".gltf")
 MODELS_DIR = "models"
+INFO_CATALOG = next(
+    (p for p in (MEDIA_ROOT / "info" / "catalogo.json", MEDIA_ROOT / "Info" / "catalogo.json") if p.is_file()),
+    MEDIA_ROOT / "info" / "catalogo.json",
+)
+
+
+def _load_json_object(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _model_manifest_path(model: Path) -> Path:
+    return model.parent / "manifest.json" if model.stem.lower() == "model" else model.with_suffix(".json")
+
+
+def _model_entry(model: Path, root: Path) -> dict[str, Any]:
+    manifest = _load_json_object(_model_manifest_path(model))
+    default_name = model.parent.name if model.stem.lower() == "model" else model.stem
+    parent = model.parent.relative_to(root)
+    return {
+        "id": model.relative_to(root).as_posix(),
+        "name": str(manifest.get("name") or default_name),
+        "src": model.relative_to(MEDIA_ROOT).as_posix(),
+        "bytes": model.stat().st_size,
+        "manifest": manifest,
+        "folder": "" if parent == Path(".") else parent.as_posix(),
+    }
 
 
 def list_models() -> list[dict[str, Any]]:
     root = MEDIA_ROOT / MODELS_DIR
     if not root.is_dir():
         return []
-    out: list[dict[str, Any]] = []
+    models = (
+        model for model in root.rglob("*")
+        if model.is_file()
+        and model.suffix.lower() in MODEL_EXTS
+        and not any(part.startswith(".") for part in model.relative_to(root).parts)
+    )
+    return [_model_entry(model, root) for model in sorted(models, key=lambda path: path.as_posix().lower())]
 
-    def entry(model: Path, manifest_path: Path, default_name: str) -> dict[str, Any]:
-        manifest: dict[str, Any] = {}
-        if manifest_path.is_file():
-            try:
-                data = json.loads(manifest_path.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    manifest = data
-            except (OSError, json.JSONDecodeError):
-                pass
-        return {
-            "id": model.relative_to(root).as_posix(),
-            "name": str(manifest.get("name") or default_name),
-            "src": model.relative_to(MEDIA_ROOT).as_posix(),
-            "bytes": model.stat().st_size,
-            "manifest": manifest,
-        }
 
-    for child in sorted(root.iterdir(), key=lambda c: c.name.lower()):
-        if child.is_file() and child.suffix.lower() in MODEL_EXTS:
-            out.append(entry(child, child.with_suffix(".json"), child.stem))
-        elif child.is_dir():
-            for name in ("model.glb", "model.gltf"):
-                model = child / name
-                if model.is_file():
-                    out.append(entry(model, child / "manifest.json", child.name))
-                    break
-    return out
+class AnatomyCatalog:
+    def __init__(self, path: Path):
+        self.path = path
+        self.stamp: float | None = None
+        self.by_id: dict[str, dict[str, Any]] = {}
+        self.by_name: dict[str, list[dict[str, Any]]] = {}
+
+    def find(self, piece_id: str = "", mesh_name: str = "") -> dict[str, Any] | None:
+        self._refresh()
+        if piece_id.startswith("za_"):
+            return self.by_id.get(piece_id)
+        matches = self.by_name.get(mesh_name, [])
+        return matches[0] if matches else None
+
+    def _refresh(self) -> None:
+        try:
+            stamp = self.path.stat().st_mtime
+        except OSError:
+            self._clear()
+            return
+        if stamp == self.stamp:
+            return
+        fichas = _load_json_object(self.path).get("fichas", {})
+        self.by_id = {
+            key: value for key, value in fichas.items()
+            if isinstance(key, str) and isinstance(value, dict)
+        } if isinstance(fichas, dict) else {}
+        self.by_name = {}
+        for info in self.by_id.values():
+            names = {str(info.get("nombre_original") or "")}
+            names.update(str(name) for name in info.get("nombres_malla", []) if name)
+            for name in names - {""}:
+                self.by_name.setdefault(name, []).append(info)
+        for matches in self.by_name.values():
+            matches.sort(key=lambda info: info.get("tipo_ficha") != "pieza")
+        self.stamp = stamp
+
+    def _clear(self) -> None:
+        self.stamp = None
+        self.by_id = {}
+        self.by_name = {}
+
+
+ANATOMY_CATALOG = AnatomyCatalog(INFO_CATALOG)
+
+
+def piece_info(piece_id: str = "", mesh_name: str = "") -> dict[str, Any] | None:
+    return ANATOMY_CATALOG.find(piece_id, mesh_name)
 
 
 def resolve_media_src(raw: Any) -> str | None:
@@ -224,6 +282,13 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == "/models":
             self._send_json({"models": list_models()})
+            return
+        if path == "/piece-info":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            piece_id = query.get("id", [""])[0]
+            mesh_name = query.get("name", [""])[0]
+            info = piece_info(piece_id, mesh_name)
+            self._send_json({"info": info}, 200 if info else 404)
             return
         if path == "/orb":
             self._send_json(_read_ring_state())

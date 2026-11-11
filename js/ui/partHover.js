@@ -1,20 +1,21 @@
 import { store } from "../core/store.js";
 import { pickAt } from "../stage/interaction.js";
 import { piecesActive, pieceLabel } from "../items/model.js";
+import { updatePieceInfoHold, cancelPieceInfoHold } from "./pieceInfo.js";
 
 const labels = new Map();
 
-function showLabel(h, text) {
-  const el = labelFor(h.id);
-  el.textContent = text;
-  el.style.transform = "translate(" + Math.round(h.x + 22) + "px," + Math.round(h.y - 34) + "px)";
+function showLabel(hand, text) {
+  const label = labelFor(hand.id);
+  label.textContent = text;
+  label.style.transform = "translate(" + Math.round(hand.x + 22) + "px," + Math.round(hand.y - 34) + "px)";
 }
 
-function draggedBy(id) {
-  for (const it of store.items) {
-    if (it.type !== "model" || !it.view.drags) continue;
-    const d = it.view.drags.get(id);
-    if (d) return { item: it, part: d.i };
+function draggedPiece(handId) {
+  for (const item of store.items) {
+    if (item.type !== "model" || !item.view.drags) continue;
+    const drag = item.view.drags.get(handId);
+    if (drag) return { item, part: drag.i };
   }
   return null;
 }
@@ -30,26 +31,47 @@ function labelFor(id) {
   return el;
 }
 
-export function updatePartHover(hands, { locked = false } = {}) {
+function updatePinchedHand(hand, now) {
+  const dragged = draggedPiece(hand.id);
+  if (!dragged) {
+    cancelPieceInfoHold(hand.id);
+    return false;
+  }
+  showLabel(hand, pieceLabel(dragged.item, dragged.part, store.showHud));
+  updatePieceInfoHold(hand, dragged.item, dragged.part, now);
+  return true;
+}
+
+function updateHover(hand, hovered) {
+  const hit = pickAt(hand.ax, hand.ay);
+  if (!hit || hit.part < 0 || !piecesActive(hit.item)) return false;
+  if (!hovered.has(hit.item)) hovered.set(hit.item, hit.part);
+  showLabel(hand, pieceLabel(hit.item, hit.part, store.showHud));
+  return true;
+}
+
+function clearHiddenLabels(visibleHands) {
+  for (const [handId, label] of labels) {
+    if (visibleHands.has(handId)) continue;
+    label.remove();
+    labels.delete(handId);
+    cancelPieceInfoHold(handId);
+  }
+}
+
+export function updatePartHover(hands, { locked = false, now = performance.now() } = {}) {
   const hovered = new Map();
-  const shown = new Set();
-  for (const h of hands) {
-    if (locked || !h.present || h.removed) continue;
-    if (h.pinched) {
-      const d = draggedBy(h.id);
-      if (d) { showLabel(h, pieceLabel(d.item, d.part, store.showHud)); shown.add(h.id); }
-      continue;
-    }
-    const hit = pickAt(h.ax, h.ay);
-    if (!hit || hit.part < 0 || !piecesActive(hit.item)) continue;
-    if (!hovered.has(hit.item)) hovered.set(hit.item, hit.part);
-    showLabel(h, pieceLabel(hit.item, hit.part, store.showHud));
-    shown.add(h.id);
+  const visibleHands = new Set();
+  for (const hand of hands) {
+    if (locked || !hand.present || hand.removed) continue;
+    const visible = hand.pinched
+      ? updatePinchedHand(hand, now)
+      : updateHover(hand, hovered);
+    if (!hand.pinched) cancelPieceInfoHold(hand.id);
+    if (visible) visibleHands.add(hand.id);
   }
-  for (const it of store.items) {
-    if (it.type === "model") it.hoverPart = hovered.has(it) ? hovered.get(it) : -1;
+  for (const item of store.items) {
+    if (item.type === "model") item.hoverPart = hovered.get(item) ?? -1;
   }
-  for (const [id, el] of labels) {
-    if (!shown.has(id)) { el.remove(); labels.delete(id); }
-  }
+  clearHiddenLabels(visibleHands);
 }

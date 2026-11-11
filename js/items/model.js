@@ -122,6 +122,19 @@ export function pieceLabel(item, i, withIds = false) {
   return withIds ? p.label + " · #" + p.ids.join(",") : p.label;
 }
 
+function pieceMetadata(item, index, key) {
+  const piece = item?.view?.parts[index];
+  return Array.isArray(piece?.[key]) ? piece[key] : [];
+}
+
+export function pieceAnatomyIds(item, i) {
+  return pieceMetadata(item, i, "anatomyIds");
+}
+
+export function pieceSourceNames(item, i) {
+  return pieceMetadata(item, i, "sourceNames");
+}
+
 function pieceFree(item, i) { return piecesActive(item) && i >= 0 && !isDragged(item.view, i); }
 
 function pieceBegin(item, i, hand, x, y) {
