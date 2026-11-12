@@ -192,12 +192,14 @@ registerMenuPage("view", {
 const GESTURES = [
   ["Pinch + arrastrar", "mover un objeto"],
   ["Tap", "pinch rápido: pulsar / expandir"],
-  ["Dos manos", "separar = escalar · girar = rotar"],
+  ["Dos pinzas sobre el modelo", "gira la línea entre las manos para rotar · separa para escalar"],
   ["Pinch en vacío ↔", "derecha desarma · izquierda arma"],
   ["Pinch sobre una pieza", "con el modelo desarmado: sacarla · cerca de su lugar encaja"],
   ["Palma de \"alto\" quieta", "detiene o reanuda el giro del modelo"],
-  ["Palma con los dedos a la cámara", "girar la muñeca = girar el modelo (o palma inclinada, modo Volante en Ajustes)"],
+  ["Rotación Perilla", "dedos extendidos hacia la cámara y gira la muñeca"],
+  ["Rotación Volante", "en Ajustes elige Volante; muestra la palma e inclínala a izquierda o derecha"],
   ["Pinch rápido en el orbe", "abre o cierra este menú · mantener y mover = moverlo"],
+  ["Desplazar el menú", "lleva la mano sin pinza al borde inferior para bajar o al superior para subir"],
   ["Pinch en vacío (rápido)", "cierra este menú"],
   ["Mouse", "arrastrar · rueda escala · Shift+rueda rota"],
 ];
@@ -220,9 +222,9 @@ registerMenuPage("settings", {
   title: "Ajustes",
   build: (ui) => [
     ui.section("Selección en el menú"),
-    ui.toggle("dwellSelect", "Seleccionar dejando el cursor quieto"),
+    ui.toggle("dwellSelect", "Usar el menú dejando la mano quieta"),
     ...(settings.dwellSelect ? [ui.choice("dwellTime", [["800", "0,8 s"], ["1000", "1 s"], ["1200", "1,2 s"]])] : []),
-    ui.note("Con esto activado, dejar la mano quieta sobre una opción la pulsa, sin pinch (Salir y Reiniciar siguen pidiendo mantener). Si se activan opciones sin querer, elige más tiempo."),
+    ui.note("Apunta una opción durante el tiempo elegido o haz una pinza rápida. Salir y Reiniciar siempre exigen mantener la pinza."),
     ui.toggle("clickSound", "Sonido al pulsar"),
     ui.section("Calibración de la mano"),
     ui.button({ label: "Calibrar mis manos", action: "calib:open",

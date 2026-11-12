@@ -236,6 +236,10 @@ export async function bootTracker() {
     if (!settings.autoSpin) toast("El giro automático está apagado (Menú › Vista)");
     else toast((paused ? "Giro detenido · " : "Giro reanudado · ") + (item.title || "modelo"));
   });
+  on("palm:dial-start", ({ hand, item }) => {
+    pulseCursor(hand);
+    toast("Rotación activa · gira la muñeca para mover " + (item.title || "el modelo"), { ms: 1800 });
+  });
   on("ui:click", ({ hand }) => {
     pulseCursor(hand);
     if (settings.clickSound) playClick();

@@ -96,7 +96,7 @@ function render() {
   bodyEl.replaceChildren(...root.build(ui));
   const n = bodyEl.querySelectorAll(":scope > .holo-folder").length;
   subEl.textContent = n + " secciones";
-  orb.querySelector(".orb-sub").textContent = n + " secciones";
+  orb.querySelector(".orb-sub").textContent = "quieta 0,8 s · pinza";
 }
 
 export function openMenu(folder = null) {
@@ -151,7 +151,7 @@ export function mountMenu() {
   orb = el("button", { id: "holo-orb", class: "holo-orb", type: "button", "data-ui": true,
     "data-action": "menu:toggle", "data-drag": "holo-orb", title: "Menú (M) · arrastra para mover" });
   orb.appendChild(el("span", { class: "orb-title" }, APP_NAME));
-  orb.appendChild(el("span", { class: "orb-sub" }, "tocar · arrastrar"));
+  orb.appendChild(el("span", { class: "orb-sub" }, "quieta 0,8 s · pinza"));
   placeOrbDefault();
 
   panel = el("section", { id: "holo-panel", class: "holo-panel", "data-ui": true, "aria-label": "Menú" });

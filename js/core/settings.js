@@ -4,13 +4,14 @@ import { emit } from "./bus.js";
 const KEY = "barehands.settings.v1";
 
 const DEFAULTS = {
+  settingsVersion: 2,
   pinchSensitivity: "normal",
   wire: true,
   modelLook: "original",
   autoSpin: true,
   palmTurn: "perilla",
   tutorialDone: false,
-  dwellSelect: false,
+  dwellSelect: true,
   dwellTime: "800",
   clickSound: false,
   orbPos: null,
@@ -33,7 +34,15 @@ const DWELL_TIMES = { 800: 800, 1000: 1000, 1200: 1200 };
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
+    if (!raw) return { ...DEFAULTS };
+    const saved = JSON.parse(raw);
+    const migrated = { ...DEFAULTS, ...saved };
+    if ((saved.settingsVersion || 0) < 2) {
+      migrated.settingsVersion = 2;
+      migrated.dwellSelect = true;
+      localStorage.setItem(KEY, JSON.stringify(migrated));
+    }
+    return migrated;
   } catch (e) {
     return { ...DEFAULTS };
   }

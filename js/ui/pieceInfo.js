@@ -17,21 +17,22 @@ function createElement(tag, className, text = "") {
 }
 
 class PieceInfoRepository {
-  async find(ids, names) {
+  async find(ids, names, modelSrc) {
     const references = [
       ...ids.map((value) => ({ key: "id", value })),
       ...names.map((value) => ({ key: "name", value })),
     ];
     for (const reference of references) {
-      const info = await this.fetch(reference);
+      const info = await this.fetch(reference, modelSrc);
       if (info) return info;
     }
     return null;
   }
 
-  async fetch({ key, value }) {
+  async fetch({ key, value }, modelSrc) {
     try {
-      const response = await fetch("/piece-info?" + key + "=" + encodeURIComponent(value), { cache: "no-store" });
+      const query = new URLSearchParams({ [key]: value, model: modelSrc });
+      const response = await fetch("/piece-info?" + query, { cache: "no-store" });
       if (!response.ok) return null;
       const data = await response.json();
       return data.info || null;
@@ -84,6 +85,7 @@ class PieceInfoView {
       createElement("h2", "piece-info-title", title),
       latin && createElement("div", "piece-info-latin", latin),
       createElement("p", "piece-info-description", description),
+      info?.contenido_general_de && createElement("div", "piece-info-context", "Contexto general de " + info.contenido_general_de),
       ...this.section("Ubicación", location),
       ...this.section("Función principal", mainFunction),
       systems && createElement("div", "piece-info-tags", systems),
@@ -141,7 +143,7 @@ class PieceInfoController {
     const requestId = ++this.requestId;
     this.owner = handId;
     this.view.show(label, ids[0], null);
-    const info = await this.repository.find(ids, pieceSourceNames(item, part));
+    const info = await this.repository.find(ids, pieceSourceNames(item, part), item.src);
     if (requestId !== this.requestId || this.owner !== handId || !info) return;
     this.view.show(label, info.id, info);
   }

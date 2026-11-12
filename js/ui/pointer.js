@@ -5,6 +5,10 @@ import { nearestIn, magnetPoint } from "./targeting.js";
 import { createPointerCore } from "./pointerCore.js";
 
 let hovered = new Set();
+let lastUpdate = 0;
+
+const SCROLL_EDGE_PX = 72;
+const SCROLL_MAX_PX_S = 620;
 
 const rectOf = (el) => el.getBoundingClientRect();
 
@@ -40,9 +44,46 @@ const view = {
   alive: (el) => el.isConnected && !el.disabled,
   holdOf: (el) => Number(el.dataset.hold) || 0,
   dwellEnabled: () => settings.dwellSelect,
-  dwellable: (el) => !!el && !el.dataset.hold && !!el.closest("[data-ui]"),
+  dwellable: (el, x, y) => !!el && !el.dataset.hold && !!el.closest("[data-ui]") && !menuScrollIntent(x, y),
   keyOf: (el) => el.dataset.action + "|" + (el.dataset.arg || ""),
 };
+
+function menuBodyAt(x, y) {
+  if (!document.body.classList.contains("menu-open")) return null;
+  const body = document.querySelector(".holo-body");
+  if (!body || body.scrollHeight <= body.clientHeight) return null;
+  const rect = body.getBoundingClientRect();
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom ? { body, rect } : null;
+}
+
+function scrollStrength(y, rect) {
+  const fromTop = y - rect.top;
+  const fromBottom = rect.bottom - y;
+  if (fromTop < SCROLL_EDGE_PX) return -(1 - fromTop / SCROLL_EDGE_PX);
+  if (fromBottom < SCROLL_EDGE_PX) return 1 - fromBottom / SCROLL_EDGE_PX;
+  return 0;
+}
+
+function menuScrollIntent(x, y) {
+  const target = menuBodyAt(x, y);
+  return !!target && scrollStrength(y, target.rect) !== 0;
+}
+
+function updateMenuScroll(hands, dt) {
+  const body = document.querySelector(".holo-body");
+  if (!body) return;
+  let direction = 0;
+  for (const hand of hands) {
+    if (!hand.present || hand.removed || hand.pinched || hand.source !== "hand") continue;
+    const target = menuBodyAt(hand.ax, hand.ay);
+    if (!target) continue;
+    const strength = scrollStrength(hand.ay, target.rect);
+    if (Math.abs(strength) > Math.abs(direction)) direction = strength;
+  }
+  if (direction) body.scrollTop += direction * SCROLL_MAX_PX_S * dt;
+  body.classList.toggle("scrolling-up", direction < 0);
+  body.classList.toggle("scrolling-down", direction > 0);
+}
 
 function fire(btn, hand) {
   btn.classList.add("fired");
@@ -83,7 +124,10 @@ on("cursor:pinch-start", (ev) => core.pinchStart(ev));
 on("cursor:pinch-end", (ev) => core.pinchEnd(ev));
 
 export function updatePointer(hands, now) {
+  const dt = lastUpdate ? Math.min(0.05, (now - lastUpdate) / 1000) : 0;
+  lastUpdate = now;
   const next = core.update(hands, now);
+  updateMenuScroll(hands, dt);
   for (const b of hovered) if (!next.has(b)) b.classList.remove("hover");
   for (const b of next) b.classList.add("hover");
   hovered = next;

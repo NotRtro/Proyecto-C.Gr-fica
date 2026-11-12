@@ -132,6 +132,7 @@ INFO_CATALOG = next(
     (p for p in (MEDIA_ROOT / "info" / "catalogo.json", MEDIA_ROOT / "Info" / "catalogo.json") if p.is_file()),
     MEDIA_ROOT / "info" / "catalogo.json",
 )
+GENERAL_INFO_CATALOG = INFO_CATALOG.with_name("contenido_general.json")
 
 
 def _load_json_object(path: Path) -> dict[str, Any]:
@@ -174,25 +175,73 @@ def list_models() -> list[dict[str, Any]]:
 
 
 class AnatomyCatalog:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, general_path: Path):
         self.path = path
-        self.stamp: float | None = None
+        self.general_path = general_path
+        self.stamp: tuple[float | None, float | None] | None = None
         self.by_id: dict[str, dict[str, Any]] = {}
         self.by_name: dict[str, list[dict[str, Any]]] = {}
+        self.general_by_model: dict[str, dict[str, Any]] = {}
 
-    def find(self, piece_id: str = "", mesh_name: str = "") -> dict[str, Any] | None:
+    def find(self, piece_id: str = "", mesh_name: str = "", model_src: str = "") -> dict[str, Any] | None:
         self._refresh()
+        matches: list[dict[str, Any]] = []
         if piece_id.startswith("za_"):
-            return self.by_id.get(piece_id)
-        matches = self.by_name.get(mesh_name, [])
-        return matches[0] if matches else None
+            info = self.by_id.get(piece_id)
+        else:
+            matches = self.by_name.get(mesh_name, [])
+            info = matches[0] if matches else None
+        if info and not self._has_content(info):
+            context = next((candidate for candidate in matches if self._has_content(candidate)), None)
+            if context:
+                info = self._merge_context(info, context, str(context.get("nombre_es") or "estructura anatómica"))
+        return self._with_general_context(info, model_src)
+
+    def _with_general_context(self, info: dict[str, Any] | None, model_src: str) -> dict[str, Any] | None:
+        general = self.general_by_model.get(model_src)
+        if not general and info:
+            for path in info.get("archivos_glb", []):
+                general = self.general_by_model.get("models/" + str(path).lstrip("/"))
+                if general:
+                    break
+        if not general:
+            return info
+        if info and self._has_content(info):
+            return info
+        return self._merge_context(info, general, str(general.get("nombre_contexto") or "estructura anatómica"))
+
+    def _merge_context(
+        self,
+        info: dict[str, Any] | None,
+        context: dict[str, Any],
+        context_name: str,
+    ) -> dict[str, Any]:
+        merged = {**context, **(info or {})}
+        for field in ("ubicacion", "funcion_principal", "descripcion_educativa", "sistemas", "especialidades"):
+            value = info.get(field) if info else None
+            if self._missing(value):
+                merged[field] = context.get(field)
+        merged["fuentes"] = list(dict.fromkeys([*(info or {}).get("fuentes", []), *context.get("fuentes", [])]))
+        merged["contenido_general_de"] = context_name
+        return merged
+
+    @staticmethod
+    def _missing(value: Any) -> bool:
+        return value is None or value == [] or str(value).strip() in ("", "pendiente", "por verificar")
+
+    def _has_content(self, info: dict[str, Any]) -> bool:
+        return not self._missing(info.get("descripcion_educativa"))
 
     def _refresh(self) -> None:
         try:
-            stamp = self.path.stat().st_mtime
+            main_stamp = self.path.stat().st_mtime
         except OSError:
-            self._clear()
-            return
+            main_stamp = None
+        try:
+            general_stamp = self.general_path.stat().st_mtime
+        except OSError:
+            general_stamp = None
+        stamp = (main_stamp, general_stamp)
         if stamp == self.stamp:
             return
         fichas = _load_json_object(self.path).get("fichas", {})
@@ -208,19 +257,25 @@ class AnatomyCatalog:
                 self.by_name.setdefault(name, []).append(info)
         for matches in self.by_name.values():
             matches.sort(key=lambda info: info.get("tipo_ficha") != "pieza")
+        general = _load_json_object(self.general_path).get("modelos", {})
+        self.general_by_model = {
+            key: value for key, value in general.items()
+            if isinstance(key, str) and isinstance(value, dict)
+        } if isinstance(general, dict) else {}
         self.stamp = stamp
 
     def _clear(self) -> None:
         self.stamp = None
         self.by_id = {}
         self.by_name = {}
+        self.general_by_model = {}
 
 
-ANATOMY_CATALOG = AnatomyCatalog(INFO_CATALOG)
+ANATOMY_CATALOG = AnatomyCatalog(INFO_CATALOG, GENERAL_INFO_CATALOG)
 
 
-def piece_info(piece_id: str = "", mesh_name: str = "") -> dict[str, Any] | None:
-    return ANATOMY_CATALOG.find(piece_id, mesh_name)
+def piece_info(piece_id: str = "", mesh_name: str = "", model_src: str = "") -> dict[str, Any] | None:
+    return ANATOMY_CATALOG.find(piece_id, mesh_name, model_src)
 
 
 def resolve_media_src(raw: Any) -> str | None:
@@ -287,7 +342,8 @@ class Handler(SimpleHTTPRequestHandler):
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             piece_id = query.get("id", [""])[0]
             mesh_name = query.get("name", [""])[0]
-            info = piece_info(piece_id, mesh_name)
+            model_src = query.get("model", [""])[0]
+            info = piece_info(piece_id, mesh_name, model_src)
             self._send_json({"info": info}, 200 if info else 404)
             return
         if path == "/orb":

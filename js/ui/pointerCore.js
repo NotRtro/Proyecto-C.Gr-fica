@@ -51,7 +51,7 @@ export function createPointerCore(view, out) {
   function updateDwell(h, cur, now) {
     const d = aims.get(h.id).dwell;
     const active = view.dwellEnabled() && h.source === "hand" && !h.pinched && !presses.has(h.id);
-    const el = active && view.dwellable(cur) ? cur : null;
+    const el = active && view.dwellable(cur, h.ax, h.ay) ? cur : null;
     if (stepDwell(d, el ? view.keyOf(el) : null, h.ax, h.ay, now)) out.fire(el, h.id);
   }
 

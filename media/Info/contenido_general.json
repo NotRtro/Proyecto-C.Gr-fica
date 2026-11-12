@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "modelos": {
+    "models/organos/boca.glb": {
+      "nombre_contexto": "Cavidad oral",
+      "sistemas": ["digestivo", "respiratorio"],
+      "especialidades": ["estomatologia", "otorrinolaringologia"],
+      "ubicacion": "En la parte inferior de la cara, limitada por los labios y las mejillas, el paladar y el suelo de la boca; se comunica posteriormente con la orofaringe.",
+      "funcion_principal": "Recibir y procesar inicialmente alimentos y líquidos, formar el bolo alimenticio y participar en el gusto, el habla y la respiración.",
+      "descripcion_educativa": "La cavidad oral comprende estructuras como labios, mejillas, dientes, lengua, paladar, mucosa y glándulas salivales. Estas estructuras colaboran en la masticación, lubricación, deglución inicial, percepción del gusto y articulación del habla.",
+      "fuentes": ["ncbi_oral_cavity"]
+    },
+    "models/organos/ojos.glb": {
+      "nombre_contexto": "Ojo y estructuras accesorias",
+      "sistemas": ["nervioso_sentidos"],
+      "especialidades": ["oftalmologia"],
+      "ubicacion": "En las órbitas del cráneo; incluye el globo ocular y estructuras accesorias como párpados, conjuntiva, aparato lagrimal y músculos extraoculares.",
+      "funcion_principal": "Recibir la luz, enfocarla sobre la retina y transformar el estímulo luminoso en señales nerviosas que se transmiten al encéfalo.",
+      "descripcion_educativa": "El ojo combina medios transparentes y capas especializadas. La córnea y el cristalino ayudan a enfocar la luz; la retina contiene tejido nervioso sensible a la luz. Las estructuras accesorias protegen, lubrican y permiten mover el globo ocular.",
+      "fuentes": ["ncbi_eye_anatomy", "ncbi_eye_physiology"]
+    },
+    "models/organos/rinones_vias_urinarias.glb": {
+      "nombre_contexto": "Riñones y vías urinarias",
+      "sistemas": ["urinario"],
+      "especialidades": ["urologia"],
+      "ubicacion": "Los riñones son órganos pares retroperitoneales situados aproximadamente entre T12 y L3; la orina pasa desde la pelvis renal a los uréteres y continúa hacia la vejiga.",
+      "funcion_principal": "Filtrar la sangre, eliminar desechos, regular agua, electrolitos y equilibrio ácido-base, y conducir la orina hacia la vejiga.",
+      "descripcion_educativa": "Cada riñón contiene corteza, médula y un sistema colector. Las nefronas forman la orina, que drena a cálices y pelvis renal antes de avanzar por los uréteres. Los riñones también participan en la regulación de la presión arterial y en funciones hormonales.",
+      "fuentes": ["ncbi_kidneys", "ncbi_renal_physiology"]
+    }
+  },
+  "fuentes": {
+    "ncbi_oral_cavity": {
+      "titulo": "Anatomy, Head and Neck, Oral Cavity (Mouth)",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK545271/"
+    },
+    "ncbi_eye_anatomy": {
+      "titulo": "Anatomy, Head and Neck, Eye",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK482428/"
+    },
+    "ncbi_eye_physiology": {
+      "titulo": "Physiology, Eye",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK470322/"
+    },
+    "ncbi_kidneys": {
+      "titulo": "Anatomy, Abdomen and Pelvis: Kidneys",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK482385/"
+    },
+    "ncbi_renal_physiology": {
+      "titulo": "Physiology, Renal",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK538339/"
+    }
+  }
+}
