@@ -133,6 +133,7 @@ INFO_CATALOG = next(
     MEDIA_ROOT / "info" / "catalogo.json",
 )
 GENERAL_INFO_CATALOG = INFO_CATALOG.with_name("contenido_general.json")
+VERIFIED_INFO_CATALOG = INFO_CATALOG.with_name("contenido_anatomico_completo.json")
 
 
 def _load_json_object(path: Path) -> dict[str, Any]:
@@ -175,13 +176,15 @@ def list_models() -> list[dict[str, Any]]:
 
 
 class AnatomyCatalog:
-    def __init__(self, path: Path, general_path: Path):
+    def __init__(self, path: Path, general_path: Path, verified_path: Path | None = None):
         self.path = path
         self.general_path = general_path
-        self.stamp: tuple[float | None, float | None] | None = None
+        self.verified_path = verified_path
+        self.stamp: tuple[float | None, float | None, float | None] | None = None
         self.by_id: dict[str, dict[str, Any]] = {}
         self.by_name: dict[str, list[dict[str, Any]]] = {}
         self.general_by_model: dict[str, dict[str, Any]] = {}
+        self.verified_by_id: dict[str, dict[str, Any]] = {}
 
     def find(self, piece_id: str = "", mesh_name: str = "", model_src: str = "") -> dict[str, Any] | None:
         self._refresh()
@@ -191,11 +194,38 @@ class AnatomyCatalog:
         else:
             matches = self.by_name.get(mesh_name, [])
             info = matches[0] if matches else None
+        info = self._with_verified_context(info)
         if info and not self._has_content(info):
             context = next((candidate for candidate in matches if self._has_content(candidate)), None)
             if context:
                 info = self._merge_context(info, context, str(context.get("nombre_es") or "estructura anatómica"))
-        return self._with_general_context(info, model_src)
+        info = self._with_general_context(info, model_src)
+        return self._with_structural_context(info)
+
+    def _with_verified_context(self, info: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not info:
+            return None
+        verified = self.verified_by_id.get(str(info.get("id") or ""))
+        if not verified:
+            return info
+        merged = {**info, **verified}
+        merged["fuentes"] = list(dict.fromkeys([*info.get("fuentes", []), *verified.get("fuentes", [])]))
+        return merged
+
+    def _with_structural_context(self, info: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not info or self._has_content(info):
+            return info
+        original = str(info.get("nombre_original") or "estructura sin nombre")
+        systems = [str(value).replace("_", " ") for value in info.get("sistemas", [])]
+        collections = [str(value) for value in info.get("colecciones_origen", [])[:4]]
+        classification = ", ".join(systems) if systems else "clasificación anatómica pendiente"
+        description = "Estructura registrada como «{}» y clasificada en {}.".format(original, classification)
+        if collections:
+            description += " En Z-Anatomy pertenece a: {}.".format("; ".join(collections))
+        merged = dict(info)
+        merged["descripcion_educativa"] = description
+        merged["contenido_estructural"] = True
+        return merged
 
     def _with_general_context(self, info: dict[str, Any] | None, model_src: str) -> dict[str, Any] | None:
         general = self.general_by_model.get(model_src)
@@ -241,7 +271,11 @@ class AnatomyCatalog:
             general_stamp = self.general_path.stat().st_mtime
         except OSError:
             general_stamp = None
-        stamp = (main_stamp, general_stamp)
+        try:
+            verified_stamp = self.verified_path.stat().st_mtime if self.verified_path else None
+        except OSError:
+            verified_stamp = None
+        stamp = (main_stamp, general_stamp, verified_stamp)
         if stamp == self.stamp:
             return
         fichas = _load_json_object(self.path).get("fichas", {})
@@ -262,6 +296,27 @@ class AnatomyCatalog:
             key: value for key, value in general.items()
             if isinstance(key, str) and isinstance(value, dict)
         } if isinstance(general, dict) else {}
+        verified = _load_json_object(self.verified_path) if self.verified_path else {}
+        sources = verified.get("fuentes", {})
+        concepts = verified.get("conceptos", {})
+        assignments = verified.get("asignaciones", {})
+        self.verified_by_id = {}
+        if isinstance(sources, dict) and isinstance(concepts, dict) and isinstance(assignments, dict):
+            for piece_id, assignment in assignments.items():
+                if not isinstance(assignment, dict):
+                    continue
+                concept = concepts.get(assignment.get("concepto"))
+                if not isinstance(concept, dict):
+                    continue
+                source_ids = concept.get("fuentes", [])
+                source_details = [sources[key] for key in source_ids if key in sources]
+                content = {**concept, **assignment}
+                content["fuentes"] = source_ids
+                content["fuentes_verificadas"] = source_details
+                content.pop("concepto", None)
+                if content.get("lateralidad") and content.get("nombre_es"):
+                    content["nombre_es"] = "{} {}".format(content["nombre_es"], content["lateralidad"])
+                self.verified_by_id[piece_id] = content
         self.stamp = stamp
 
     def _clear(self) -> None:
@@ -269,9 +324,10 @@ class AnatomyCatalog:
         self.by_id = {}
         self.by_name = {}
         self.general_by_model = {}
+        self.verified_by_id = {}
 
 
-ANATOMY_CATALOG = AnatomyCatalog(INFO_CATALOG, GENERAL_INFO_CATALOG)
+ANATOMY_CATALOG = AnatomyCatalog(INFO_CATALOG, GENERAL_INFO_CATALOG, VERIFIED_INFO_CATALOG)
 
 
 def piece_info(piece_id: str = "", mesh_name: str = "", model_src: str = "") -> dict[str, Any] | None:

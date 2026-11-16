@@ -4,7 +4,7 @@ import { emit } from "./bus.js";
 const KEY = "barehands.settings.v1";
 
 const DEFAULTS = {
-  settingsVersion: 2,
+  settingsVersion: 3,
   pinchSensitivity: "normal",
   wire: true,
   modelLook: "original",
@@ -38,10 +38,11 @@ function load() {
     const saved = JSON.parse(raw);
     const migrated = { ...DEFAULTS, ...saved };
     if ((saved.settingsVersion || 0) < 2) {
-      migrated.settingsVersion = 2;
       migrated.dwellSelect = true;
-      localStorage.setItem(KEY, JSON.stringify(migrated));
     }
+    if ((saved.settingsVersion || 0) < 3) migrated.modelLook = "original";
+    migrated.settingsVersion = DEFAULTS.settingsVersion;
+    localStorage.setItem(KEY, JSON.stringify(migrated));
     return migrated;
   } catch (e) {
     return { ...DEFAULTS };

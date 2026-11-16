@@ -22,6 +22,7 @@ import { trialStop, trialPalmOverMenu, sweepPalm, trialDial, trialStillDrift, tr
 import { trialPiece } from "./pieceBench.mjs";
 import { explodePlan, partFactor } from "../js/three/explodePlan.js";
 import { hasOwnLook } from "../js/three/modelLook.js";
+import { anatomyColorFor, needsAnatomyColor, needsEmissiveNormalization } from "../js/three/anatomyColor.js";
 import {
   findPieces, prettyName, screenToNdc, screenToNdcClamped, groupPieces, shouldSnap, manifestPathFor,
   guideOrder, createGuide, guideExpected, guideCanSnap, guideAdvance,
@@ -767,6 +768,21 @@ test("apariencia: con texturas o colores propios se ve original; sin nada, holog
   check(hasOwnLook([mat([1, 1, 1], true)]), "con textura -> original");
   check(hasOwnLook([mat([0.54, 0.25, 0.25]), mat([0.4, 0.4, 0.4]), mat([1, 1, 1])]), "Buggy -> original");
   check(hasOwnLook([mat([0.9, 0.9, 0.9]), mat([0.1, 0.1, 0.1])]), "blanco y negro -> original");
+});
+
+test("apariencia anatómica: colorea materiales vacíos o demasiado claros sin alterar información visual", () => {
+  check(needsAnatomyColor({ color: [0.797, 0.997, 0.973] }), "el cian casi blanco necesita contraste");
+  check(needsAnatomyColor({ color: [0.7, 0.62, 0.57] }), "el beige pálido necesita contraste después de la conversión lineal");
+  check(needsAnatomyColor({ color: [0.84, 0.61, 0.6] }), "el rosa pálido convertido no debe verse blanco");
+  check(needsAnatomyColor({ color: [1, 1, 1], declared: false }), "una malla sin material necesita color");
+  check(!needsAnatomyColor({ color: [1, 1, 1], textured: true }), "una textura tiene prioridad");
+  check(!needsAnatomyColor({ color: [1, 1, 1], vertexColors: true }), "los colores por vértice tienen prioridad");
+  check(!needsAnatomyColor({ color: [0.68, 0.05, 0.04] }), "un material rojo con contraste se conserva");
+  check(anatomyColorFor("Ulnar artery.r") !== anatomyColorFor("Ulnar nerve.r"), "arterias y nervios usan familias distintas");
+  check(anatomyColorFor("Anterior ligament.l") === anatomyColorFor("Posterior ligament.r"), "los ligamentos comparten semántica cromática");
+  check(needsEmissiveNormalization({ emissive: [1, 1, 1] }), "la emisión blanca exportada debe neutralizarse");
+  check(!needsEmissiveNormalization({ emissive: [1, 1, 1], emissiveMap: true }), "un mapa emisivo explícito se conserva");
+  check(!needsEmissiveNormalization({ emissive: [0.2, 0.05, 0.01] }), "una emisión cromática moderada se conserva");
 });
 
 console.log("gemelo digital (fase 7):");

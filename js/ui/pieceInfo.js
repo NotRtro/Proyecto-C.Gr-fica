@@ -16,6 +16,15 @@ function createElement(tag, className, text = "") {
   return element;
 }
 
+function listText(values, limit = Infinity) {
+  if (!Array.isArray(values)) return "";
+  return values
+    .map((value) => usefulText(value).replaceAll("_", " "))
+    .filter(Boolean)
+    .slice(0, limit)
+    .join(" · ");
+}
+
 class PieceInfoRepository {
   async find(ids, names, modelSrc) {
     const references = [
@@ -77,17 +86,25 @@ class PieceInfoView {
     const location = usefulText(info?.ubicacion);
     const mainFunction = usefulText(info?.funcion_principal);
     const description = usefulText(info?.descripcion_educativa, mainFunction || EMPTY_DESCRIPTION);
-    const systems = Array.isArray(info?.sistemas)
-      ? info.sistemas.join(" · ").replaceAll("_", " ")
-      : "";
+    const originalName = usefulText(info?.nombre_original);
+    const systems = listText(info?.sistemas);
+    const specialties = listText(info?.especialidades);
+    const collections = listText(info?.colecciones_origen, 6);
     return [
       createElement("div", "piece-info-kicker", "Pieza anatómica · " + (id || "sin ID vinculado")),
       createElement("h2", "piece-info-title", title),
       latin && createElement("div", "piece-info-latin", latin),
       createElement("p", "piece-info-description", description),
+      info?.estado_revision === "fuente_verificada" && createElement("div", "piece-info-context", "Información médica con fuente verificada"),
+      info?.estado_revision === "contexto_medico_verificado" && createElement("div", "piece-info-context", "Contexto médico con fuente · revisión específica pendiente"),
       info?.contenido_general_de && createElement("div", "piece-info-context", "Contexto general de " + info.contenido_general_de),
+      info?.contenido_estructural && createElement("div", "piece-info-context", "Ficha estructural · descripción específica pendiente de revisión"),
+      ...this.section("Nombre original", originalName !== title ? originalName : ""),
       ...this.section("Ubicación", location),
       ...this.section("Función principal", mainFunction),
+      ...this.section("Especialidades", specialties),
+      ...this.section("Colecciones de origen", collections),
+      ...this.sources(info?.fuentes_verificadas),
       systems && createElement("div", "piece-info-tags", systems),
     ].filter(Boolean);
   }
@@ -95,6 +112,22 @@ class PieceInfoView {
   section(title, body) {
     return body
       ? [createElement("h3", "piece-info-heading", title), createElement("p", "piece-info-copy", body)]
+      : [];
+  }
+
+  sources(values) {
+    if (!Array.isArray(values) || !values.length) return [];
+    const container = createElement("div", "piece-info-sources");
+    for (const source of values) {
+      if (!source?.url || !source?.titulo) continue;
+      const link = createElement("a", "piece-info-source", source.organizacion + " · " + source.titulo);
+      link.href = source.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      container.appendChild(link);
+    }
+    return container.childElementCount
+      ? [createElement("h3", "piece-info-heading", "Fuentes"), container]
       : [];
   }
 }

@@ -5,6 +5,7 @@ import { settings } from "../core/settings.js";
 import { emit } from "../core/bus.js";
 import { buildHoloModelMaterial } from "../three/holoModelMaterial.js";
 import { hasOwnLook } from "../three/modelLook.js";
+import { anatomyColorFor, needsAnatomyColor, needsEmissiveNormalization } from "../three/anatomyColor.js";
 import { manifestPathFor, guideOrder, createGuide, guideExpected, guideCanSnap, guideAdvance } from "../three/pieces.js";
 import {
   buildPieces, applyPieces, relaxPieces, placedCount, pickPiece, setHighlight, isDragged,
@@ -57,6 +58,7 @@ async function loadInto(view, src) {
   const gltf = await loader.loadAsync("/media/" + src);
   if (view.disposed) { disposeObject(gltf.scene); return; }
   const obj = gltf.scene;
+  prepareOriginalMaterials(obj, gltf.parser);
 
   obj.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(obj);
@@ -96,6 +98,53 @@ function countTriangles(obj) {
 function describeMaterial(m) {
   const textured = ["map", "emissiveMap", "normalMap", "aoMap"].some((k) => !!m[k]);
   return { textured, color: m.color ? [m.color.r, m.color.g, m.color.b] : [1, 1, 1] };
+}
+
+function declaredMaterial(node, parser) {
+  const association = parser.associations?.get(node);
+  const mesh = association?.meshes;
+  const primitive = association?.primitives;
+  return Number.isInteger(mesh) && Number.isInteger(primitive)
+    && Number.isInteger(parser.json.meshes?.[mesh]?.primitives?.[primitive]?.material);
+}
+
+function materialNeedsColor(material, node, declared) {
+  return needsAnatomyColor({
+    color: material.color ? [material.color.r, material.color.g, material.color.b] : [1, 1, 1],
+    textured: !!material.map,
+    vertexColors: !!node.geometry?.attributes?.color,
+    declared,
+  });
+}
+
+function preparedMaterial(material, node, recolor) {
+  const prepared = material.clone();
+  if (prepared.emissive && needsEmissiveNormalization({
+    emissive: [prepared.emissive.r, prepared.emissive.g, prepared.emissive.b],
+    emissiveMap: !!prepared.emissiveMap,
+  })) prepared.emissive.setRGB(0, 0, 0);
+  if (recolor && prepared.color) {
+    prepared.color.setHex(anatomyColorFor(node.name));
+    prepared.roughness = 0.72;
+    prepared.metalness = 0;
+  }
+  return prepared;
+}
+
+function prepareOriginalMaterials(obj, parser) {
+  const declaredCache = new Map();
+  obj.traverse((node) => {
+    if (!node.isMesh) return;
+    const declared = declaredMaterial(node, parser);
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    const prepared = materials.map((material) => {
+      const recolor = materialNeedsColor(material, node, declared);
+      if (recolor) return preparedMaterial(material, node, true);
+      if (!declaredCache.has(material)) declaredCache.set(material, preparedMaterial(material, node, false));
+      return declaredCache.get(material);
+    });
+    node.material = Array.isArray(node.material) ? prepared : prepared[0];
+  });
 }
 
 const explodeFrac = (item) => Math.min(1, item.explode / HOLO.EXPLODE_OUT);

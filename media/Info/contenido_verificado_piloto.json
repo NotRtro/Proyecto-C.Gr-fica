@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "fecha_revision": "2026-11-15",
+  "alcance": "Piloto de 50 mallas y 33 conceptos anatómicos",
+  "fuentes": {
+    "fipat_ta2": {
+      "organizacion": "IFAA-FIPAT",
+      "titulo": "Terminologia Anatomica, segunda edición",
+      "url": "https://ifaa.net/committees/anatomical-terminology-fipat/fipat-ifaa-terminologies/",
+      "uso": "Normalización del nombre anatómico",
+      "licencia": "CC BY-ND 4.0"
+    },
+    "ncbi_upper_limb": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Shoulder and Upper Limb, Arm Structure and Function",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK507841/",
+      "uso": "Ubicación y función de huesos del miembro superior"
+    },
+    "ncbi_lower_limb": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Bony Pelvis and Lower Limb: Leg Bones",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK537024/",
+      "uso": "Ubicación y función de huesos del miembro inferior"
+    },
+    "ncbi_upper_nerves": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Shoulder and Upper Limb, Nerves",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK526056/",
+      "uso": "Trayecto y función de nervios del miembro superior"
+    },
+    "ncbi_eye": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Head and Neck, Eye",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK482428/",
+      "uso": "Estructura y función del ojo"
+    },
+    "ncbi_abdomen": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Abdomen and Pelvis: Abdomen",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK553104/",
+      "uso": "Relaciones anatómicas de vísceras abdominales"
+    },
+    "ncbi_thorax": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Thorax",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK557710/",
+      "uso": "Relaciones anatómicas del tórax"
+    },
+    "ncbi_diaphragm": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Thorax: Diaphragm",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK519558/",
+      "uso": "Ubicación y función del diafragma"
+    },
+    "ncbi_eye_physiology": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Physiology, Eye",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK470322/",
+      "uso": "Función óptica de córnea, iris y retina"
+    },
+    "ncbi_pelvis": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Abdomen and Pelvis, Pelvis",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK482258/",
+      "uso": "Relaciones y soporte de órganos pélvicos"
+    },
+    "ncbi_bladder": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Abdomen and Pelvis: Bladder",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK531465/",
+      "uso": "Ubicación y función de la vejiga"
+    },
+    "ncbi_prostate": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Abdomen and Pelvis, Prostate",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK540987/",
+      "uso": "Ubicación y función de la próstata"
+    },
+    "ncbi_thyroid": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Head and Neck, Thyroid",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK470452/",
+      "uso": "Ubicación y función de la tiroides"
+    },
+    "ncbi_trachea": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Head and Neck, Trachea",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK448070/",
+      "uso": "Ubicación y función de la tráquea"
+    },
+    "ncbi_tongue": {
+      "organizacion": "NCBI Bookshelf",
+      "titulo": "Anatomy, Head and Neck, Tongue",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK507782/",
+      "uso": "Estructura e inervación de la lengua"
+    }
+  },
+  "conceptos": {
+    "clavicle": {"nombre_es":"Clavícula","nombre_anatomico_latin":"Clavicula","ubicacion":"Cintura escapular, entre el esternón y la escápula.","funcion_principal":"Mantener el miembro superior separado del tronco y transmitir fuerzas al esqueleto axial.","descripcion_educativa":"Hueso largo con forma de S que conecta el miembro superior con el tórax mediante sus articulaciones esternoclavicular y acromioclavicular.","fuentes":["fipat_ta2","ncbi_upper_limb"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "cornea": {"nombre_es":"Córnea","nombre_anatomico_latin":"Cornea","ubicacion":"Porción transparente anterior de la túnica fibrosa del globo ocular.","funcion_principal":"Transmitir y refractar la luz que entra al ojo.","descripcion_educativa":"Superficie transparente situada delante del iris; constituye una parte importante del sistema óptico y protege las estructuras anteriores del ojo.","fuentes":["fipat_ta2","ncbi_eye","ncbi_eye_physiology"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "femur": {"nombre_es":"Fémur","nombre_anatomico_latin":"Femur","ubicacion":"Muslo, entre la pelvis y la rodilla.","funcion_principal":"Soportar y transmitir peso y actuar como palanca para el movimiento del miembro inferior.","descripcion_educativa":"Hueso largo del muslo que se articula proximalmente con el acetábulo y distalmente con la tibia y la patela.","fuentes":["fipat_ta2","ncbi_lower_limb"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "fibula": {"nombre_es":"Fíbula","nombre_anatomico_latin":"Fibula","ubicacion":"Lado lateral de la pierna, paralela a la tibia.","funcion_principal":"Estabilizar el tobillo y ofrecer inserción muscular, con escasa carga de peso.","descripcion_educativa":"Hueso largo y delgado de la pierna que participa en la articulación del tobillo y se une a la tibia en sus extremos.","fuentes":["fipat_ta2","ncbi_lower_limb"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "gluteus_maximus": {"nombre_es":"Músculo glúteo mayor","nombre_anatomico_latin":"Musculus gluteus maximus","ubicacion":"Región posterior de la cadera y la pelvis.","funcion_principal":"Extender y rotar lateralmente el muslo, especialmente al levantarse o subir.","descripcion_educativa":"Músculo superficial y voluminoso de la región glútea que contribuye a la potencia y estabilidad de la cadera.","fuentes":["fipat_ta2","ncbi_pelvis"],"confianza_vinculacion":0.98,"estado_revision":"fuente_verificada"},
+    "humerus": {"nombre_es":"Húmero","nombre_anatomico_latin":"Humerus","ubicacion":"Brazo, entre el hombro y el codo.","funcion_principal":"Servir como soporte y palanca para los movimientos del brazo y antebrazo.","descripcion_educativa":"Único hueso del brazo; se articula con la escápula en el hombro y con radio y ulna en el codo.","fuentes":["fipat_ta2","ncbi_upper_limb"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "iris": {"nombre_es":"Iris","nombre_anatomico_latin":"Iris","ubicacion":"Túnica vascular anterior del ojo, detrás de la córnea y delante del cristalino.","funcion_principal":"Regular la cantidad de luz que atraviesa la pupila.","descripcion_educativa":"Diafragma pigmentado que forma la parte coloreada del ojo y modifica el diámetro pupilar mediante músculo liso.","fuentes":["fipat_ta2","ncbi_eye","ncbi_eye_physiology"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "median_nerve": {"nombre_es":"Nervio mediano","nombre_anatomico_latin":"Nervus medianus","ubicacion":"Desciende desde el plexo braquial por brazo y antebrazo hasta la mano.","funcion_principal":"Inervar músculos flexores del antebrazo, músculos tenares y sensibilidad de la mano lateral.","descripcion_educativa":"Nervio mixto del miembro superior que atraviesa el túnel carpiano y participa en movimientos finos del pulgar y los dedos.","fuentes":["fipat_ta2","ncbi_upper_nerves"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "patella": {"nombre_es":"Patela","nombre_anatomico_latin":"Patella","ubicacion":"Cara anterior de la rodilla, dentro del tendón del cuádriceps.","funcion_principal":"Proteger la rodilla y aumentar la ventaja mecánica del cuádriceps.","descripcion_educativa":"Hueso sesamoideo que se articula con el fémur y transmite la fuerza del cuádriceps hacia el ligamento patelar.","fuentes":["fipat_ta2","ncbi_lower_limb"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "radial_nerve": {"nombre_es":"Nervio radial","nombre_anatomico_latin":"Nervus radialis","ubicacion":"Desde el plexo braquial por la región posterior del brazo hacia antebrazo y mano.","funcion_principal":"Activar extensores del miembro superior y aportar sensibilidad posterior y dorsolateral.","descripcion_educativa":"Nervio mixto que rodea el húmero y se divide cerca del codo en ramas superficial sensitiva y profunda motora.","fuentes":["fipat_ta2","ncbi_upper_nerves"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "radius": {"nombre_es":"Radio","nombre_anatomico_latin":"Radius","ubicacion":"Lado lateral del antebrazo en posición anatómica, del codo a la muñeca.","funcion_principal":"Participar en la rotación del antebrazo y transmitir carga desde la mano.","descripcion_educativa":"Hueso del antebrazo situado del lado del pulgar; rota alrededor de la ulna durante pronación y supinación.","fuentes":["fipat_ta2","ncbi_upper_limb"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "retina": {"nombre_es":"Retina","nombre_anatomico_latin":"Retina","ubicacion":"Capa nerviosa interna que tapiza la región posterior del globo ocular.","funcion_principal":"Convertir la luz en señales nerviosas enviadas al cerebro.","descripcion_educativa":"Tejido sensorial que contiene fotorreceptores y circuitos neuronales; su información sale del ojo por el nervio óptico.","fuentes":["fipat_ta2","ncbi_eye","ncbi_eye_physiology"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "scapula": {"nombre_es":"Escápula","nombre_anatomico_latin":"Scapula","ubicacion":"Región posterolateral superior del tórax.","funcion_principal":"Dar inserción muscular y orientar la cavidad glenoidea para el movimiento del hombro.","descripcion_educativa":"Hueso plano triangular de la cintura escapular que se articula con la clavícula y la cabeza del húmero.","fuentes":["fipat_ta2","ncbi_upper_limb"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "sciatic_nerve": {"nombre_es":"Nervio ciático","nombre_anatomico_latin":"Nervus ischiadicus","ubicacion":"Sale de la pelvis y desciende por la región glútea y posterior del muslo.","funcion_principal":"Llevar fibras motoras y sensitivas hacia gran parte del miembro inferior.","descripcion_educativa":"Gran nervio del plexo sacro que se divide habitualmente en nervios tibial y fibular común cerca de la rodilla.","fuentes":["fipat_ta2","ncbi_pelvis","ncbi_lower_limb"],"confianza_vinculacion":0.97,"estado_revision":"fuente_verificada"},
+    "tibia": {"nombre_es":"Tibia","nombre_anatomico_latin":"Tibia","ubicacion":"Lado medial de la pierna, entre rodilla y tobillo.","funcion_principal":"Soportar la mayor parte del peso de la pierna y transmitirlo al pie.","descripcion_educativa":"Principal hueso portante de la pierna; se articula con fémur, fíbula y talo.","fuentes":["fipat_ta2","ncbi_lower_limb"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "ulna": {"nombre_es":"Ulna","nombre_anatomico_latin":"Ulna","ubicacion":"Lado medial del antebrazo en posición anatómica.","funcion_principal":"Estabilizar el antebrazo y formar la bisagra principal del codo.","descripcion_educativa":"Hueso del antebrazo situado del lado del dedo meñique; su olécranon forma la prominencia posterior del codo.","fuentes":["fipat_ta2","ncbi_upper_limb"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "ulnar_nerve": {"nombre_es":"Nervio ulnar","nombre_anatomico_latin":"Nervus ulnaris","ubicacion":"Desciende por el lado medial del brazo, pasa detrás del epicóndilo medial y llega a la mano.","funcion_principal":"Inervar numerosos músculos intrínsecos de la mano y dar sensibilidad al borde medial de la mano.","descripcion_educativa":"Nervio mixto del plexo braquial importante para la coordinación fina de los dedos y la sensibilidad del meñique y parte del anular.","fuentes":["fipat_ta2","ncbi_upper_nerves"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "ascending_colon": {"nombre_es":"Colon ascendente","nombre_anatomico_latin":"Colon ascendens","ubicacion":"Lado derecho del abdomen, desde el ciego hasta la flexura cólica derecha.","funcion_principal":"Transportar el contenido intestinal y participar en absorción de agua y electrolitos.","descripcion_educativa":"Primer segmento ascendente del intestino grueso, situado principalmente en la región abdominal derecha.","fuentes":["fipat_ta2","ncbi_abdomen"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "descending_colon": {"nombre_es":"Colon descendente","nombre_anatomico_latin":"Colon descendens","ubicacion":"Lado izquierdo del abdomen, entre la flexura cólica izquierda y el colon sigmoide.","funcion_principal":"Conducir y compactar el contenido intestinal antes de su paso al colon sigmoide.","descripcion_educativa":"Segmento retroperitoneal del intestino grueso que desciende por la pared abdominal posterior izquierda.","fuentes":["fipat_ta2","ncbi_abdomen"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "diaphragm": {"nombre_es":"Diafragma","nombre_anatomico_latin":"Diaphragma","ubicacion":"Entre las cavidades torácica y abdominal.","funcion_principal":"Producir la mayor parte del cambio de volumen durante la inspiración tranquila.","descripcion_educativa":"Lámina musculotendinosa en forma de cúpula que desciende al contraerse, amplía el tórax y facilita la entrada de aire.","fuentes":["fipat_ta2","ncbi_diaphragm"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "duodenum": {"nombre_es":"Duodeno","nombre_anatomico_latin":"Duodenum","ubicacion":"Primera porción del intestino delgado, entre estómago y yeyuno, alrededor de la cabeza pancreática.","funcion_principal":"Recibir quimo, bilis y secreciones pancreáticas para continuar la digestión.","descripcion_educativa":"Segmento corto del intestino delgado, mayormente retroperitoneal, donde se neutraliza y mezcla el contenido procedente del estómago.","fuentes":["fipat_ta2","ncbi_abdomen"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "gallbladder": {"nombre_es":"Vesícula biliar","nombre_anatomico_latin":"Vesica biliaris","ubicacion":"Cara visceral inferior del hígado.","funcion_principal":"Almacenar y concentrar bilis y liberarla hacia el duodeno.","descripcion_educativa":"Órgano hueco pequeño conectado a la vía biliar; responde a la digestión de grasas expulsando bilis.","fuentes":["fipat_ta2","ncbi_abdomen"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "liver": {"nombre_es":"Hígado","nombre_anatomico_latin":"Hepar","ubicacion":"Principalmente en el cuadrante superior derecho, debajo del diafragma.","funcion_principal":"Procesar nutrientes, producir bilis, sintetizar proteínas plasmáticas y participar en detoxificación.","descripcion_educativa":"Gran órgano glandular del abdomen superior con funciones metabólicas, sintéticas, digestivas y de almacenamiento.","fuentes":["fipat_ta2","ncbi_abdomen"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "mandible": {"nombre_es":"Mandíbula","nombre_anatomico_latin":"Mandibula","ubicacion":"Porción inferior del esqueleto facial.","funcion_principal":"Sostener los dientes inferiores y permitir movimientos de masticación y habla.","descripcion_educativa":"Hueso móvil del cráneo que se articula con los temporales mediante las articulaciones temporomandibulares.","fuentes":["fipat_ta2"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "pancreas": {"nombre_es":"Páncreas","nombre_anatomico_latin":"Pancreas","ubicacion":"Abdomen superior, detrás del estómago, desde el duodeno hacia el bazo.","funcion_principal":"Secretar enzimas digestivas y hormonas que regulan la glucosa sanguínea.","descripcion_educativa":"Glándula con componentes exocrino y endocrino; su cabeza está rodeada por el duodeno y su cola se dirige al bazo.","fuentes":["fipat_ta2","ncbi_abdomen"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "prostate": {"nombre_es":"Próstata","nombre_anatomico_latin":"Prostata","ubicacion":"Pelvis masculina, inferior a la vejiga y alrededor de la uretra proximal.","funcion_principal":"Aportar secreciones al líquido seminal.","descripcion_educativa":"Glándula fibromuscular del aparato reproductor masculino atravesada por la uretra prostática.","fuentes":["fipat_ta2","ncbi_prostate"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "spleen": {"nombre_es":"Bazo","nombre_anatomico_latin":"Splen","ubicacion":"Hipocondrio izquierdo, entre el diafragma y el estómago.","funcion_principal":"Filtrar sangre, participar en vigilancia inmunitaria y retirar células sanguíneas envejecidas.","descripcion_educativa":"Mayor órgano linfático, muy vascularizado y relacionado con estómago, riñón izquierdo y cola pancreática.","fuentes":["fipat_ta2","ncbi_abdomen"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "stomach": {"nombre_es":"Estómago","nombre_anatomico_latin":"Gaster","ubicacion":"Abdomen superior, entre esófago y duodeno.","funcion_principal":"Almacenar, mezclar y comenzar la digestión química del alimento.","descripcion_educativa":"Órgano muscular hueco que transforma el alimento en quimo antes de enviarlo al intestino delgado.","fuentes":["fipat_ta2","ncbi_abdomen"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "superior_vena_cava": {"nombre_es":"Vena cava superior","nombre_anatomico_latin":"Vena cava superior","ubicacion":"Mediastino superior derecho, desembocando en la aurícula derecha.","funcion_principal":"Retornar al corazón sangre venosa de cabeza, cuello, miembros superiores y tórax superior.","descripcion_educativa":"Gran vena formada por la unión de las venas braquiocefálicas que conduce sangre hacia la aurícula derecha.","fuentes":["fipat_ta2","ncbi_thorax"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "thyroid": {"nombre_es":"Glándula tiroides","nombre_anatomico_latin":"Glandula thyroidea","ubicacion":"Cuello anterior, alrededor de la laringe inferior y los primeros anillos traqueales.","funcion_principal":"Producir hormonas tiroideas y calcitonina, relacionadas con metabolismo, crecimiento y calcio.","descripcion_educativa":"Glándula endocrina de dos lóbulos unidos habitualmente por un istmo anterior a la tráquea.","fuentes":["fipat_ta2","ncbi_thyroid"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "tongue": {"nombre_es":"Lengua","nombre_anatomico_latin":"Lingua","ubicacion":"Piso de la cavidad oral y región orofaríngea.","funcion_principal":"Participar en manipulación del alimento, deglución, gusto y articulación del habla.","descripcion_educativa":"Órgano muscular móvil cubierto por mucosa, con musculatura intrínseca y extrínseca e inervación sensitiva y motora compleja.","fuentes":["fipat_ta2","ncbi_tongue"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "trachea": {"nombre_es":"Tráquea","nombre_anatomico_latin":"Trachea","ubicacion":"Línea media del cuello y mediastino superior, entre laringe y bronquios principales.","funcion_principal":"Conducir aire y contribuir a su limpieza mediante el sistema mucociliar.","descripcion_educativa":"Conducto respiratorio flexible sostenido por anillos cartilaginosos incompletos que mantiene abierta la vía aérea.","fuentes":["fipat_ta2","ncbi_trachea"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"},
+    "urinary_bladder": {"nombre_es":"Vejiga urinaria","nombre_anatomico_latin":"Vesica urinaria","ubicacion":"Pelvis menor, posterior a la sínfisis púbica.","funcion_principal":"Almacenar orina y expulsarla durante la micción.","descripcion_educativa":"Órgano muscular hueco y distensible conectado con los uréteres y la uretra; el músculo detrusor participa en su vaciamiento.","fuentes":["fipat_ta2","ncbi_bladder"],"confianza_vinculacion":1.0,"estado_revision":"fuente_verificada"}
+  },
+  "asignaciones": {
+    "za_005167496382":{"concepto":"clavicle","lateralidad":"izquierda"},"za_bd8d6853e78e":{"concepto":"clavicle","lateralidad":"derecha"},
+    "za_36001b58621d":{"concepto":"cornea","lateralidad":"izquierda"},"za_f2039bd2daf4":{"concepto":"cornea","lateralidad":"derecha"},
+    "za_d29c94c511b1":{"concepto":"femur","lateralidad":"izquierdo"},"za_49a18a012a37":{"concepto":"femur","lateralidad":"derecho"},
+    "za_1cc8f1aa0cab":{"concepto":"fibula","lateralidad":"izquierda"},"za_d51d3f2b8cf5":{"concepto":"fibula","lateralidad":"derecha"},
+    "za_bcfde09e7209":{"concepto":"gluteus_maximus","lateralidad":"izquierdo"},"za_4be6da97ba51":{"concepto":"gluteus_maximus","lateralidad":"derecho"},
+    "za_7cf5ad44d15b":{"concepto":"humerus","lateralidad":"izquierdo"},"za_1ba0c96210a9":{"concepto":"humerus","lateralidad":"derecho"},
+    "za_b7a784d852f0":{"concepto":"iris","lateralidad":"izquierdo"},"za_2f9dfd11c15d":{"concepto":"iris","lateralidad":"derecho"},
+    "za_18f7ba8821ed":{"concepto":"median_nerve","lateralidad":"izquierdo"},"za_e1c0be862028":{"concepto":"median_nerve","lateralidad":"derecho"},
+    "za_4781fd007bc4":{"concepto":"patella","lateralidad":"izquierda"},"za_7c3fa8f7853d":{"concepto":"patella","lateralidad":"derecha"},
+    "za_5fb7a4abc5ed":{"concepto":"radial_nerve","lateralidad":"izquierdo"},"za_374f83153221":{"concepto":"radial_nerve","lateralidad":"derecho"},
+    "za_f3bb848b07ef":{"concepto":"radius","lateralidad":"izquierdo"},"za_69e83692e50d":{"concepto":"radius","lateralidad":"derecho"},
+    "za_ae40c0f52b1c":{"concepto":"retina","lateralidad":"izquierda"},"za_924eec88db47":{"concepto":"retina","lateralidad":"derecha"},
+    "za_3399d7ff50ad":{"concepto":"scapula","lateralidad":"izquierda"},"za_65f5742f8e72":{"concepto":"scapula","lateralidad":"derecha"},
+    "za_5bbea2c3fec5":{"concepto":"sciatic_nerve","lateralidad":"izquierdo"},"za_4326e726c599":{"concepto":"sciatic_nerve","lateralidad":"derecho"},
+    "za_a57181b0136a":{"concepto":"tibia","lateralidad":"izquierda"},"za_249bf4e08da1":{"concepto":"tibia","lateralidad":"derecha"},
+    "za_ed840724b670":{"concepto":"ulna","lateralidad":"izquierda"},"za_eb8eff4e28e4":{"concepto":"ulna","lateralidad":"derecha"},
+    "za_66e817f346af":{"concepto":"ulnar_nerve","lateralidad":"izquierdo"},"za_27f31c2f0202":{"concepto":"ulnar_nerve","lateralidad":"derecho"},
+    "za_6f51acba4854":{"concepto":"ascending_colon"},"za_09a027d6c92e":{"concepto":"descending_colon"},"za_186755d4a8db":{"concepto":"diaphragm"},"za_99a2882af6c9":{"concepto":"duodenum"},
+    "za_37c983f75ead":{"concepto":"gallbladder"},"za_b74f481cd3ae":{"concepto":"liver"},"za_a2ed9b4a453e":{"concepto":"mandible"},"za_00584f00fd42":{"concepto":"pancreas"},
+    "za_137c69c8f25a":{"concepto":"prostate"},"za_9fafaf480a34":{"concepto":"spleen"},"za_baeb8394fbf2":{"concepto":"stomach"},"za_6d32c2494443":{"concepto":"superior_vena_cava"},
+    "za_4a5921c1a24b":{"concepto":"thyroid"},"za_eb1b41e85e51":{"concepto":"tongue"},"za_6f55ae4b82fe":{"concepto":"trachea"},"za_394ac9412378":{"concepto":"urinary_bladder"}
+  }
+}

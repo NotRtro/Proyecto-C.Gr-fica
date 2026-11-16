@@ -4,7 +4,8 @@
   "description": "Cliente web de barehands. Sin dependencias ni build: package.json solo existe para que Node trate js/ como modulos ES y para los scripts de tests.",
   "type": "module",
   "scripts": {
-    "test": "node tests/run.mjs",
+    "test": "python3 tests/anatomy_pilot_test.py && python3 tests/anatomy_full_test.py && node tests/run.mjs",
+    "anatomy:build": "python3 scripts/build_anatomy_catalog.py",
     "recordings": "node tests/make-recordings.mjs"
   }
 }
